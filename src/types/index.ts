@@ -27,6 +27,7 @@ export interface TrendingToken {
   symbol: string;
   score: number;
   lastUpdate: number;
+  chain: Chain;
 }
 
 export interface BuyAlert {

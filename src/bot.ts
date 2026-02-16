@@ -229,11 +229,41 @@ bot.command('setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
 bot.command('safu_trending', async (ctx) => {
   const leaderboard = await TrendingModule.getLeaderboard(5);
   if (leaderboard.length === 0) return ctx.reply('🏛️ *SAFU Trending* 📈\nNo trades recorded yet.');
+  
   let message = `🏛️ *SAFU Velocity Leaderboard* 📈\n\n`;
+  const now = Date.now();
+
   leaderboard.forEach((token, index) => {
-    message += `${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹'} *${token.symbol}*\n   • *Momentum:* \`$${token.score.toFixed(2)}/min\`\n\n`;
+    const diffSeconds = Math.floor((now - token.lastUpdate) / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    
+    let timeAgo = 'Just now';
+    if (diffMinutes > 0) {
+      timeAgo = diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
+    } else if (diffSeconds > 10) {
+      timeAgo = `${diffSeconds} seconds ago`;
+    }
+
+    const formattedMomentum = token.score.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
+    const chainPath = token.chain === 'solana' ? 'solana' : 'ethereum';
+    const networkLabel = token.chain === 'solana' ? '🔹 SOL' : '🔹 ETH';
+    const dexUrl = `https://dexscreener.com/${chainPath}/${token.tokenAddress}`;
+    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
+    
+    // Using <code> for tap-to-copy address in Telegram
+    message += `${medal} *${token.symbol}* (${networkLabel})\n` +
+               `   • *Momentum:* \`$${formattedMomentum}/min\`\n` +
+               `   • *Status:* \`${timeAgo}\`\n` +
+               `   • *CA:* \`${token.tokenAddress}\`\n` +
+               `   • 📊 [DexScreener](${dexUrl})\n\n`;
   });
-  ctx.reply(message, { parse_mode: 'Markdown' } as any);
+  
+  message += `_Velocity = Real-time USD buy speed per minute._`;
+  ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any);
 });
 
 bot.action('cmd_setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));

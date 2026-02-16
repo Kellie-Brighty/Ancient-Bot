@@ -6,6 +6,7 @@ interface Trade {
   amountUSD: number;
   timestamp: number;
   symbol: string;
+  chain: 'eth' | 'solana';
 }
 
 export class TrendingModule {
@@ -18,7 +19,8 @@ export class TrendingModule {
       tokenAddress: alert.tokenAddress,
       amountUSD: alert.amountUSD,
       timestamp: alert.timestamp,
-      symbol: alert.symbol
+      symbol: alert.symbol,
+      chain: alert.chain
     };
 
     this.trades.push(trade);
@@ -30,7 +32,8 @@ export class TrendingModule {
       tokenAddress: alert.tokenAddress,
       symbol: alert.symbol,
       score: score,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
+      chain: alert.chain
     });
   }
 
