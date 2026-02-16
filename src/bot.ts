@@ -388,7 +388,8 @@ bot.on('my_chat_member', async (ctx) => {
       `🏛️ *SAFU Bot is ready!* 🛡️\n\n` +
       `I have been granted Admin powers. I'm now ready to handle security and intelligence for this community.\n\n` +
       `🛡️ *Safeguard:* Human-only verification portal.\n` +
-      `📈 *Trending:* High-velocity momentum tracking.\n\n` +
+      `📈 *Trending:* High-velocity momentum tracking.\n` +
+      `🎯 *Sniper:* High-precision buy alerts on ETH & SOL.\n\n` +
       `👉 *Admins:* Quick access below:`,
       Markup.inlineKeyboard([
         [
