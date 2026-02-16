@@ -422,24 +422,6 @@ bot.on('new_chat_members', async (ctx) => {
         `👉 *Owner:* Please promote me to Admin to unlock these features!`
       );
     }
-
-    await ctx.replyWithMarkdown(
-      `🏛️ *SAFU Bot is ready!* 🛡️\n\n` +
-      `I have been granted Admin powers. I'm now ready to handle security and intelligence for this community.\n\n` +
-      `🛡️ *Safeguard:* Human-only verification portal.\n` +
-      `📈 *Trending:* High-velocity momentum tracking.\n\n` +
-      `👉 *Admins:* Quick access below:`,
-      Markup.inlineKeyboard([
-        [
-          Markup.button.callback('🛡️ Portal Link', 'cmd_portal_welcome'),
-          Markup.button.callback('🛠️ Setup Monitor', 'cmd_setup')
-        ],
-        [
-          Markup.button.callback('📈 View Trending', 'cmd_trending_welcome'),
-          Markup.button.callback('❓ View Help', 'cmd_help_welcome')
-        ]
-      ])
-    );
   }
   await SafeguardModule.handleNewMember(ctx);
 });
