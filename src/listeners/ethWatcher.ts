@@ -22,7 +22,7 @@ export class EthWatcher {
 
   async startListening(callback: (alert: BuyAlert) => void) {
     this.alertCallback = callback;
-    console.log('🏛️  Ancient Watcher: Ethereum Precision Sniper Active (Waiting for targets)');
+    console.log('🏛️  SAFU Watcher: Ethereum Precision Sniper Active (Waiting for targets)');
   }
 
   private async getPairInfo(tokenAddress: string) {
@@ -48,7 +48,7 @@ export class EthWatcher {
       if (!uniqueTokens.includes(token)) {
         contract.removeAllListeners();
         this.activeSubscriptions.delete(token);
-        console.log(`🏛️  Ancient Watcher: Desubscribed from ETH token ${token}`);
+        console.log(`🏛️  SAFU Watcher: Desubscribed from ETH token ${token}`);
       }
     }
 
@@ -57,7 +57,7 @@ export class EthWatcher {
       if (!this.activeSubscriptions.has(token)) {
         const pair = await this.getPairInfo(token);
         if (!pair || !pair.pairAddress) {
-          console.warn(`🏛️  Ancient Watcher: Could not find Uniswap pair for ETH token ${token}`);
+          console.warn(`🏛️  SAFU Watcher: Could not find Uniswap pair for ETH token ${token}`);
           continue;
         }
 
@@ -116,15 +116,15 @@ export class EthWatcher {
                 isNewHolder: true // Hard to check on ETH without deep state call, default to true
               };
 
-              console.log(`🏛️  Ancient Sniper: [ETH MATCH] for ${token} by ${to} (${solSpent.toFixed(4)} ETH)`);
+              console.log(`🏛️  SAFU Sniper: [ETH MATCH] for ${token} by ${to} (${solSpent.toFixed(4)} ETH)`);
               this.alertCallback(alert);
             }
           });
 
           this.activeSubscriptions.set(token, contract);
-          console.log(`🏛️  Ancient Watcher: Now SNIPING ETH alerts for ${token} (Pool: ${pair.pairAddress})`);
+          console.log(`🏛️  SAFU Watcher: Now SNIPING ETH alerts for ${token} (Pool: ${pair.pairAddress})`);
         } catch (e) {
-          console.error(`🏛️  Ancient Watcher: Failed to subscribe to ETH token ${token}:`, e);
+          console.error(`🏛️  SAFU Watcher: Failed to subscribe to ETH token ${token}:`, e);
         }
       }
     }

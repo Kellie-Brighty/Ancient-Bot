@@ -1,58 +1,62 @@
-import { TrendingToken, BuyAlert } from '../types/index';
+import { BuyAlert } from '../types';
+import { FirestoreService } from './firestoreService';
+
+interface Trade {
+  tokenAddress: string;
+  amountUSD: number;
+  timestamp: number;
+  symbol: string;
+}
 
 export class TrendingModule {
-  private static WHALE_THRESHOLD_USD = 1000;
-  private static DECAY_PERCENTAGE = 0.1; // 10% decay
-  private static DECAY_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+  private static trades: Trade[] = [];
+  private static WINDOW_MS = 24 * 60 * 60 * 1000;
+  private static VELOCITY_WINDOW_MS = 60 * 60 * 1000;
 
-  // In-memory store for now
-  private tokens: Record<string, TrendingToken> = {};
+  static async recordBuy(alert: BuyAlert) {
+    const trade: Trade = {
+      tokenAddress: alert.tokenAddress,
+      amountUSD: alert.amountUSD,
+      timestamp: alert.timestamp,
+      symbol: alert.symbol
+    };
 
-  constructor() {
-    // Start decay loop
-    setInterval(() => this.applyDecay(), TrendingModule.DECAY_INTERVAL_MS);
-  }
+    this.trades.push(trade);
+    this.cleanup();
 
-  handleBuy(alert: BuyAlert) {
-    const { tokenAddress, symbol, amountUSD, chain } = alert;
-
-    if (!this.tokens[tokenAddress]) {
-      this.tokens[tokenAddress] = {
-        tokenAddress,
-        symbol,
-        score: 0,
-        lastBuyAt: new Date(),
-        totalVolume: 0,
-        chain
-      };
-    }
-
-    const token = this.tokens[tokenAddress];
+    const score = this.calculateVelocityScore(alert.tokenAddress);
     
-    // Scoring logic
-    const points = amountUSD >= TrendingModule.WHALE_THRESHOLD_USD ? 10 : 1;
-    token.score += points;
-    token.totalVolume += amountUSD;
-    token.lastBuyAt = new Date();
-
-    console.log(`Updated score for ${symbol}: ${token.score} (+${points})`);
+    await FirestoreService.updateTrendingToken({
+      tokenAddress: alert.tokenAddress,
+      symbol: alert.symbol,
+      score: score,
+      lastUpdate: Date.now()
+    });
   }
 
-  private applyDecay() {
-    console.log('Applying point decay to trending tokens...');
-    for (const address in this.tokens) {
-      this.tokens[address].score *= (1 - TrendingModule.DECAY_PERCENTAGE);
-      
-      // Remove tokens with very low scores to keep memory clean
-      if (this.tokens[address].score < 0.1) {
-        delete this.tokens[address];
-      }
-    }
+  private static cleanup() {
+    const cutoff = Date.now() - this.WINDOW_MS;
+    this.trades = this.trades.filter(t => t.timestamp > cutoff);
   }
 
-  getTopTokens(limit: number = 10): TrendingToken[] {
-    return Object.values(this.tokens)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+  private static calculateVelocityScore(tokenAddress: string): number {
+    const now = Date.now();
+    const cutoff = now - this.VELOCITY_WINDOW_MS;
+    
+    const recentTrades = this.trades.filter(t => 
+      t.tokenAddress === tokenAddress && t.timestamp > cutoff
+    );
+
+    if (recentTrades.length === 0) return 0;
+    const totalVolume = recentTrades.reduce((sum, t) => sum + t.amountUSD, 0);
+    
+    const firstTradeTime = Math.min(...recentTrades.map(t => t.timestamp));
+    const durationMins = Math.max((now - firstTradeTime) / 60000, 1);
+    
+    return totalVolume / durationMins;
+  }
+
+  static async getLeaderboard(limit: number = 10) {
+    return await FirestoreService.getTopTrending(limit);
   }
 }

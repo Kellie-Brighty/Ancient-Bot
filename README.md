@@ -1,6 +1,6 @@
-# Ancient Bot 🏛️💎🦾
+# SAFU Bot 🛡️💎🦾
 
-Ancient Bot is a high-performance, professional-grade Telegram community management and buy alert system. It features **100% accurate structural buy detection** for both Solana and Ethereum, a guided setup wizard, and robust security modules.
+SAFU Bot is a high-performance, professional-grade Telegram community management and buy alert system. It features **100% accurate structural buy detection** for both Solana and Ethereum, a guided setup wizard, and robust security modules.
 
 ## 🚀 Key Features
 
@@ -69,8 +69,8 @@ Ancient Bot is a high-performance, professional-grade Telegram community managem
 1.  Add the bot to your Telegram group and make it an Admin.
 2.  Use `/setup` to launch the guided wizard.
 3.  Configure your chain, token, and premium visuals.
-4.  Ready to rock! 🏛️💎🦾
+4.  Ready to rock! 🛡️💎🦾
 
 ## 🛡️ License
 
-MIT License. Created by Ancient.
+MIT License. Created by SAFU.

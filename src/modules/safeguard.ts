@@ -20,7 +20,7 @@ export class SafeguardModule {
         // Friendly welcome for the stealth-verified user
         await ctx.replyWithMarkdown(
           `Welcome [${member.first_name}](tg://user?id=${member.id})! 🏛️\n\n` +
-          `Your identity has been verified by *Ancient Gatekeeper*. Enjoy the group!`
+          `Your identity has been verified by *SAFU Gatekeeper*. Enjoy the group!`
         );
 
         this.verifiedUsers.delete(member.id.toString()); // Clean up
@@ -116,7 +116,7 @@ export class SafeguardModule {
           console.log(`Safeguard: 🛠️ Generating robust invite for user ${userId} to access group ${groupId}`);
           
           const invite = await ctx.telegram.createChatInviteLink(groupId, {
-            name: `Ancient_${userId}_${Date.now()}`
+            name: `SAFU_${userId}_${Date.now()}`
           });
           
           console.log(`Safeguard: ✅ Robust link generated: ${invite.invite_link}`);
@@ -154,7 +154,7 @@ export class SafeguardModule {
 
                 // Retry with the NEW supergroup ID immediately
                 const newInvite = await ctx.telegram.createChatInviteLink(newIdStr, {
-                  name: `Ancient_Migrate_${userId}_${Date.now()}`
+                  name: `SAFU_Migrate_${userId}_${Date.now()}`
                 });
 
                 const nowMigrate = new Date().toLocaleTimeString();

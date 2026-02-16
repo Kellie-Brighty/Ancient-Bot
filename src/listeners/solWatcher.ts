@@ -16,40 +16,73 @@ export class SolWatcher {
 
   async startListening(callback: (alert: BuyAlert) => void) {
     this.alertCallback = callback;
-    console.log('🏛️  Ancient Watcher: Solana Precision Sniper Active (Waiting for targets)');
+    console.log('🏛️  SAFU Watcher: Solana Precision sniper Active (Waiting for targets)');
+  }
+
+  private async getVaultAddress(tokenMint: string): Promise<string | null> {
+    try {
+      // 1. Check if it's a Pump.fun token
+      if (tokenMint.endsWith('pump')) {
+        const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5DkZJv99zz88BfN7m6WkJJrFvK3MvswH');
+        const [bondingCurve] = PublicKey.findProgramAddressSync(
+          [Buffer.from('bonding-curve'), new PublicKey(tokenMint).toBuffer()],
+          PUMP_PROGRAM
+        );
+        return bondingCurve.toString();
+      }
+
+      // 2. Otherwise, check DexScreener for Raydium Pair
+      const resp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`);
+      const data: any = await resp.json();
+      const pair = data.pairs?.find((p: any) => p.dexId === 'raydium');
+      
+      if (pair && pair.pairAddress) {
+        return pair.pairAddress;
+      }
+    } catch (e) {
+      console.error('🏛️  SAFU Watcher: Vault discovery failed:', e);
+    }
+    return null;
   }
 
   async updateWatchList(tokens: string[]) {
     const uniqueTokens = Array.from(new Set(tokens.filter(t => t && t.length >= 32)));
     
+    // Cleanup old subs
     for (const [token, subId] of this.activeSubscriptions.entries()) {
       if (!uniqueTokens.includes(token)) {
-        await this.connection.removeOnLogsListener(subId);
+        await this.connection.removeAccountChangeListener(subId);
         this.activeSubscriptions.delete(token);
-        console.log(`🏛️  Ancient Watcher: Desubscribed from ${token}`);
+        console.log(`🏛️  SAFU Watcher: Desubscribed from ${token}`);
       }
     }
 
+    // Add new subs
     for (const token of uniqueTokens) {
       if (!this.activeSubscriptions.has(token)) {
+        const vault = await this.getVaultAddress(token);
+        if (!vault) {
+          console.warn(`🏛️  SAFU Watcher: Could not find vault for ${token}`);
+          continue;
+        }
+
         try {
-          const subId = this.connection.onLogs(
-            new PublicKey(token),
-            async ({ logs, err, signature }) => {
-              if (err) return;
-              
-              // Low-precision trigger: basically any transaction involving this token
-              // We'll do the high-precision balance check in processTransaction
+          const subId = this.connection.onAccountChange(
+            new PublicKey(vault),
+            async () => {
               if (this.alertCallback) {
-                this.processTransaction(signature, token, this.alertCallback);
+                const signatures = await this.connection.getSignaturesForAddress(new PublicKey(vault), { limit: 1 });
+                if (signatures.length > 0) {
+                  this.processTransaction(signatures[0].signature, token, this.alertCallback);
+                }
               }
             },
             'confirmed'
           );
           this.activeSubscriptions.set(token, subId);
-          console.log(`🏛️  Ancient Watcher: Now SNIPING alerts for ${token}`);
+          console.log(`🏛️  SAFU Watcher: NOW SNIPING [ACCOUNT TRIGGER] for ${token}`);
         } catch (e) {
-          console.error(`🏛️  Ancient Watcher: Failed to subscribe to ${token}:`, e);
+          console.error(`🏛️  SAFU Watcher: Failed to subscribe to vault ${vault}:`, e);
         }
       }
     }
@@ -82,56 +115,44 @@ export class SolWatcher {
 
       if (!tx || !tx.meta) return;
 
-      // 1. Identify the Signer (Buyer)
       const buyer = tx.transaction.message.accountKeys[0].pubkey.toString();
-      
-      // 2. Identify SOL Movement (preSol - postSol)
       const preSol = tx.meta.preBalances[0] || 0;
       const postSol = tx.meta.postBalances[0] || 0;
       const solSpent = (preSol - postSol) / 1e9;
 
-      // --- DUST FILTER ---
-      // Ignore trades below 0.005 SOL (approx $1) to prevent flooding/rate-limits
       if (solSpent < 0.005) return;
 
-      // 3. Identify Token Movement for the specific mint we're watching
       const preBalances = tx.meta.preTokenBalances || [];
       const postBalances = tx.meta.postTokenBalances || [];
 
       const targetPreBalance = preBalances.find(b => b.mint === targetTokenMint && b.owner === buyer)?.uiTokenAmount.uiAmount || 0;
       const targetPostBalance = postBalances.find(b => b.mint === targetTokenMint && b.owner === buyer)?.uiTokenAmount.uiAmount || 0;
-      
       const tokenDelta = targetPostBalance - targetPreBalance;
 
-      // 4. THE ULTIMATE BUY CHECK
-      // If user spent SOL and gained Tokens, it is 100% a BUY.
       if (solSpent > 0 && tokenDelta > 0) {
-        const amountTokenStr = tokenDelta.toLocaleString(undefined, { maximumFractionDigits: 0 });
-
-        // Fetch Live Metadata for the Alert
         const meta = await this.getTokenMetadata(targetTokenMint);
         const amountUSD = tokenDelta * meta.priceUsd;
 
         const alert: BuyAlert = {
           tokenAddress: targetTokenMint, 
           symbol: meta.symbol,
-          amountToken: amountTokenStr,
+          amountToken: tokenDelta.toLocaleString(undefined, { maximumFractionDigits: 0 }),
           amountNative: `${solSpent.toFixed(3)} SOL`,
           amountUSD: amountUSD,
           marketCap: meta.marketCap,
           buyer: buyer,
           txnHash: signature,
           chain: 'solana',
-          dex: 'Solana DEX', // Could be anything, balance check is chain-agnostic
+          dex: 'Solana DEX',
           timestamp: Date.now(),
           isNewHolder: targetPreBalance === 0
         };
 
-        console.log(`🏛️  Ancient Sniper: [ACCURATE MATCH] for ${targetTokenMint} by ${buyer} (${solSpent.toFixed(3)} SOL)`);
+        console.log(`🏛️  SAFU Sniper: [VAULT MATCH] for ${targetTokenMint} (${solSpent.toFixed(3)} SOL)`);
         callback(alert);
       }
     } catch (e) {
-      // Quietly ignore parsing errors
+      // Quietly ignore
     }
   }
 }

@@ -49,7 +49,7 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('Ancient Bot Server is running 🛡️');
+  res.send('SAFU Bot Server is running 🛡️');
 });
 
 // Launch the Telegram Bot
