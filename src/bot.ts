@@ -265,7 +265,7 @@ bot.command('safu_trending', async (ctx) => {
                `   • 📊 [DexScreener](${dexUrl})\n\n`;
   });
   
-  message += `_Velocity = Real-time USD buy speed per minute._`;
+  message += `_Momentum = The "Speed of Money". It's how much USD is being spent on this token every minute. Higher = More buy interest right now!_`;
   ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any);
 });
 
