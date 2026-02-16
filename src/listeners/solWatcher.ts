@@ -17,7 +17,7 @@ export class SolWatcher {
 
   async startListening(callback: (alert: BuyAlert) => void) {
     this.alertCallback = callback;
-    console.log('🏛️  SAFU Watcher: Solana Precision sniper Active (Waiting for targets)');
+    console.log('🏛️  SAFU Watcher: Solana Precision Buy Monitor Active (Waiting for targets)');
   }
 
   private async getVaultAddress(tokenMint: string): Promise<string | null> {
@@ -163,7 +163,7 @@ export class SolWatcher {
           isNewHolder: targetPreBalance === 0
         };
 
-        console.log(`🏛️  SAFU Sniper: [VAULT MATCH] for ${targetTokenMint} (${solSpent.toFixed(3)} SOL)`);
+        console.log(`🏛️  SAFU Buy Monitor: [VAULT MATCH] for ${targetTokenMint} (${solSpent.toFixed(3)} SOL)`);
         callback(alert);
       }
     } catch (e) {

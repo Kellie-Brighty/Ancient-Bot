@@ -39,7 +39,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
   'SETUP_WIZARD',
   async (ctx) => {
     await ctx.reply(
-      `🏛️ *SAFU Setup Wizard: Step 1*\n\nWelcome to the SAFU Sniper setup. Select the network you want to monitor:`,
+      `🏛️ *SAFU Setup Wizard: Step 1*\n\nWelcome to the SAFU Buy Monitor setup. Select the network you want to monitor:`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([
@@ -91,7 +91,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
         buyMedia: state.buyMedia,
         safeguardEnabled: false, welcomeMessage: '', minBuyAmount: 0
       };
-      syncSniper();
+      syncBuyMonitor();
     }
     await ctx.reply('🏛️ *Setup Complete!* 🦾\n\nEverything is locked in.', 
       Markup.inlineKeyboard([[Markup.button.callback('🛡️ Enable Safeguard', 'enable_safeguard_final')]]));
@@ -139,10 +139,10 @@ setupWizard.action('finish_wizard', async (ctx) => {
       buyMedia: state.buyMedia,
       safeguardEnabled: false, welcomeMessage: '', minBuyAmount: 0
     };
-    syncSniper();
+    syncBuyMonitor();
   }
   await safeAnswer(ctx, 'All set! 🏁');
-  await ctx.reply('🏛️ *SAFU Sniper Configured!* 🦾\n\nYour bot is now live.', 
+  await ctx.reply('🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.', 
     Markup.inlineKeyboard([[Markup.button.callback('🛡️ Enable Safeguard', 'enable_safeguard_final')]]));
   return ctx.scene.leave();
 });
@@ -195,7 +195,7 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
   }
 };
 
-const syncSniper = async () => {
+const syncBuyMonitor = async () => {
   const solTokens = Object.values(groupConfigs).filter(c => c.chain === 'solana').map(c => c.tokenAddress).filter(t => t && t.length >= 32);
   const ethTokens = Object.values(groupConfigs).filter(c => c.chain === 'eth').map(c => c.tokenAddress).filter(t => t && t.startsWith('0x'));
   await solWatcher.updateWatchList(solTokens);
@@ -204,7 +204,7 @@ const syncSniper = async () => {
 
 solWatcher.startListening(broadcastBuyAlert).catch(console.error);
 ethWatcher.startListening(broadcastBuyAlert).catch(console.error);
-syncSniper();
+syncBuyMonitor();
 
 bot.catch((err: any, ctx: Context) => {
   console.error(`Error for ${ctx.updateType}:`, err);
@@ -343,7 +343,7 @@ bot.action('cmd_help_welcome', async (ctx) => {
   await safeAnswer(ctx);
   ctx.replyWithMarkdown(
     `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
-    `• /setup - Launch the sniper setup wizard\n` +
+    `• /setup - Launch the buy monitor setup wizard\n` +
     `• /safu_trending - View the trending leaderboard\n` +
     `• /safu_portal - Get your Safeguard portal link\n` +
     `• /help - Show this menu\n\n` +
@@ -389,12 +389,12 @@ bot.on('my_chat_member', async (ctx) => {
       `I have been granted Admin powers. I'm now ready to handle security and intelligence for this community.\n\n` +
       `🛡️ *Safeguard:* Human-only verification portal.\n` +
       `📈 *Trending:* High-velocity momentum tracking.\n` +
-      `🎯 *Sniper:* High-precision buy alerts on ETH & SOL.\n\n` +
+      `🎯 *Buy Monitor:* High-precision buy alerts on ETH & SOL.\n\n` +
       `👉 *Admins:* Quick access below:`,
       Markup.inlineKeyboard([
         [
           Markup.button.callback('🛡️ Portal Link', 'cmd_portal_welcome'),
-          Markup.button.callback('🛠️ Setup Sniper', 'cmd_setup')
+          Markup.button.callback('🛠️ Setup Monitor', 'cmd_setup')
         ],
         [
           Markup.button.callback('📈 View Trending', 'cmd_trending_welcome'),
@@ -418,7 +418,7 @@ bot.on('new_chat_members', async (ctx) => {
         `I am the ultimate security and intelligence suite for your community, but I need **Administrator privileges** to function correctly.\n\n` +
         `🛡️ *Safeguard:* Human-only verification portal.\n` +
         `📈 *Trending:* High-velocity momentum tracking.\n` +
-        `🎯 *Sniper:* High-precision buy alerts on ETH & SOL.\n\n` +
+        `🎯 *Buy Monitor:* High-precision buy alerts on ETH & SOL.\n\n` +
         `👉 *Owner:* Please promote me to Admin to unlock these features!`
       );
     }
@@ -432,7 +432,7 @@ bot.on('new_chat_members', async (ctx) => {
       Markup.inlineKeyboard([
         [
           Markup.button.callback('🛡️ Portal Link', 'cmd_portal_welcome'),
-          Markup.button.callback('🛠️ Setup Sniper', 'cmd_setup')
+          Markup.button.callback('🛠️ Setup Monitor', 'cmd_setup')
         ],
         [
           Markup.button.callback('📈 View Trending', 'cmd_trending_welcome'),
@@ -449,7 +449,7 @@ bot.action(/verify:(.+)/, async (ctx) => { await SafeguardModule.handleVerificat
 bot.command('help', (ctx) => {
   ctx.replyWithMarkdown(
     `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
-    `• /setup - Launch the sniper setup wizard\n` +
+    `• /setup - Launch the buy monitor setup wizard\n` +
     `• /safu_trending - View the trending leaderboard\n` +
     `• /help - Show this menu\n\n` +
     `*SAFU V2 Precision:* Structural Buy Detection active. 🦾`
@@ -459,7 +459,7 @@ bot.command('help', (ctx) => {
 export const launchBot = () => {
   // Set Quick Menu Commands
   bot.telegram.setMyCommands([
-    { command: 'setup', description: '🛠️ Configure SAFU Sniper' },
+    { command: 'setup', description: '🛠️ Configure SAFU Buy Monitor' },
     { command: 'safu_trending', description: '📈 View Trending Leaderboard' },
     { command: 'safu_portal', description: '🛡️ Get Safeguard Portal Link' },
     { command: 'help', description: '❓ Get Help & Info' }

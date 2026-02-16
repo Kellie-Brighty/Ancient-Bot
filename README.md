@@ -4,7 +4,7 @@ SAFU Bot is a high-performance, professional-grade Telegram community management
 
 ## 🚀 Key Features
 
-### 🏛️ Multi-Chain Precision Sniper
+### 🏛️ Multi-Chain Precision Buy Monitor
 
 - **Balance-Check Logic**: 100% accurate buy detection on Solana and Ethereum. No "keyword guessing"—the bot analyzes actual movement of SOL/ETH and Tokens on the blockchain.
 - **Zero-Noise Monitoring**: Built-in **Dust Filters** ($1 threshold for SOL/ETH) to ignore bot spam and prevent Telegram rate limiting.

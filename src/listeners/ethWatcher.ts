@@ -22,7 +22,7 @@ export class EthWatcher {
 
   async startListening(callback: (alert: BuyAlert) => void) {
     this.alertCallback = callback;
-    console.log('🏛️  SAFU Watcher: Ethereum Precision Sniper Active (Waiting for targets)');
+    console.log('🏛️  SAFU Watcher: Ethereum Precision Buy Monitor Active (Waiting for targets)');
   }
 
   private async getPairInfo(tokenAddress: string) {
@@ -116,7 +116,7 @@ export class EthWatcher {
                 isNewHolder: true // Hard to check on ETH without deep state call, default to true
               };
 
-              console.log(`🏛️  SAFU Sniper: [ETH MATCH] for ${token} by ${to} (${solSpent.toFixed(4)} ETH)`);
+              console.log(`🏛️  SAFU Buy Monitor: [ETH MATCH] for ${token} by ${to} (${solSpent.toFixed(4)} ETH)`);
               this.alertCallback(alert);
             }
           });
