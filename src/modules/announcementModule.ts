@@ -12,8 +12,8 @@ export class AnnouncementModule {
     this.channelId = channelId;
     console.log(`🏛️ SAFU Announcements: Initialized for channel ${this.channelId}`);
     
-    // Start Heartbeat: 1 minute for active testing
-    this.startHeartbeat(60000);
+    // Start Heartbeat: 5 minutes for production
+    this.startHeartbeat(300000);
   }
 
   private static startHeartbeat(ms: number) {
