@@ -1,6 +1,7 @@
 import express from 'express';
 import * as dotenv from 'dotenv';
-import { launchBot } from './bot';
+import { launchBot, bot } from './bot';
+import { AnnouncementModule } from './modules/announcementModule';
 
 dotenv.config();
 
@@ -54,6 +55,14 @@ app.get('/', (req, res) => {
 
 // Launch the Telegram Bot
 launchBot();
+
+// Initialize Global Announcements if channel ID is provided
+const announcementChannelId = process.env.ANNOUNCEMENT_CHANNEL_ID;
+if (announcementChannelId) {
+  AnnouncementModule.init(bot, announcementChannelId);
+} else {
+  console.warn('⚠️ SAFU Announcements: No ANNOUNCEMENT_CHANNEL_ID found in .env');
+}
 
 app.listen(port, () => {
   console.log(`Express server is listening on port ${port}`);

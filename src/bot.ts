@@ -6,13 +6,13 @@ import { SolWatcher } from './listeners/solWatcher';
 import { EthWatcher } from './listeners/ethWatcher';
 import { TrendingModule } from './modules/trending';
 import { ChainUtils } from './utils/chainUtils';
+import { Connection } from '@solana/web3.js';
 
 dotenv.config();
 
-const token = process.env.BOT_TOKEN;
-if (!token) {
-  throw new Error('BOT_TOKEN must be provided!');
-}
+const bot_token = process.env.BOT_TOKEN!;
+export const bot = new Telegraf<Context>(bot_token);
+const connection = new Connection(process.env.SOL_RPC_URL!, 'confirmed' as any);
 
 // Initialize Watchers
 const solWatcher = new SolWatcher();
@@ -146,10 +146,12 @@ setupWizard.action('finish_wizard', async (ctx) => {
   return ctx.scene.leave();
 });
 
-const bot = new Telegraf<WizardContext>(token);
-const stage = new Scenes.Stage<WizardContext>([setupWizard]);
+const stage = new Scenes.Stage<WizardContext>([setupWizard], {
+  ttl: 300,
+});
+
 bot.use(session());
-bot.use(stage.middleware());
+bot.use(stage.middleware() as any);
 
 const broadcastBuyAlert = async (alert: BuyAlert) => {
   const targetGroups = Object.values(groupConfigs).filter(
