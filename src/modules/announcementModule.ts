@@ -12,8 +12,8 @@ export class AnnouncementModule {
     this.channelId = channelId;
     console.log(`🏛️ SAFU Announcements: Initialized for channel ${this.channelId}`);
     
-    // Start Heartbeat: 10 seconds for testing (will be 5 mins for prod)
-    this.startHeartbeat(10000);
+    // Start Heartbeat: 5 minutes for production
+    this.startHeartbeat(300000);
   }
 
   private static startHeartbeat(ms: number) {
@@ -62,7 +62,7 @@ export class AnnouncementModule {
     });
 
     message += `_Momentum = "Speed of Money". Higher = Faster Buy Interest!_ 🦾\n` +
-               `👉 [Setup SAFU for your Group](https://t.me/${(this.bot as any).botInfo?.username})`;
+               `👉 [Add SAFU to your Group](https://t.me/${(this.bot as any).botInfo?.username}?startgroup=true)`;
 
     await this.bot.telegram.sendMessage(this.channelId, message, { 
       parse_mode: 'Markdown',

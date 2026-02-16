@@ -225,7 +225,17 @@ bot.start(async (ctx) => {
     const groupId = payload.split('_')[1], userId = ctx.from?.id;
     return ctx.reply('🏛️ *Welcome to SAFU Gatekeeper*\nPlease verify you are human.', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('🛡️ I am Human', `verify:${userId}:${groupId}:dm`)]]) });
   }
-  ctx.replyWithMarkdown(`🏛️ *Welcome to SAFU Bot* 🏛️\n\nUltimate suite for community security and intelligence.`, Markup.inlineKeyboard([[Markup.button.callback('🛠️ Launch Setup', 'cmd_setup')]]));
+  if (ctx.chat.type === 'private') {
+    return ctx.replyWithMarkdown(
+      `🏛️ *Welcome to SAFU Bot* 🛡️\n\n` +
+      `I am the ultimate suite for community security and intelligence.\n\n` +
+      `To secure your group and enable the **Trending Leaderboard**, click the button below to add me as an Admin!`,
+      Markup.inlineKeyboard([
+        [Markup.button.url('➕ Add SAFU to Group', `https://t.me/${ctx.botInfo.username}?startgroup=true`)]
+      ])
+    );
+  }
+  ctx.replyWithMarkdown(`🏛️ *SAFU Bot Active* 🏛️\n\nUse /setup to launch the configuration wizard.`, Markup.inlineKeyboard([[Markup.button.callback('🛠️ Launch Setup', 'cmd_setup')]]));
 });
 
 bot.command('setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
@@ -271,6 +281,11 @@ bot.command('safu_trending', async (ctx) => {
   ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any);
 });
 
+// Debug: Capture Channel IDs
+bot.on('channel_post', (ctx) => {
+  console.log("🏛️  SAFU Debug: Channel ID Detected ->", ctx.chat.id);
+});
+
 bot.action('cmd_setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
 bot.action('enable_safeguard_final', async (ctx) => {
   const chatId = ctx.chat?.id.toString();
@@ -282,7 +297,17 @@ bot.action('enable_safeguard_final', async (ctx) => {
 });
 
 bot.on('new_chat_members', async (ctx) => {
-  if (ctx.botInfo.id === (ctx.message as any).new_chat_members[0].id) ctx.reply('SAFU Bot is here! /setup to start.');
+  const newMembers = (ctx.message as any).new_chat_members;
+  const isBotAdded = newMembers.some((m: any) => m.id === ctx.botInfo.id);
+
+  if (isBotAdded) {
+    await ctx.replyWithMarkdown(
+      `🏛️ *SAFU Bot has arrived!* 🛡️\n\n` +
+      `I'm ready to protect this group and track trending momentum.\n\n` +
+      `👉 *Admins:* Use /setup to configure your sniper and premium visuals!`,
+      Markup.inlineKeyboard([[Markup.button.callback('🛠️ Launch Setup', 'cmd_setup')]])
+    );
+  }
   await SafeguardModule.handleNewMember(ctx);
 });
 
