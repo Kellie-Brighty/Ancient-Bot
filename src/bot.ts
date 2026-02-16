@@ -226,7 +226,7 @@ bot.start(async (ctx) => {
 });
 
 bot.command('setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
-bot.command('trending', async (ctx) => {
+bot.command('safu_trending', async (ctx) => {
   const leaderboard = await TrendingModule.getLeaderboard(5);
   if (leaderboard.length === 0) return ctx.reply('🏛️ *SAFU Trending* 📈\nNo trades recorded yet.');
   let message = `🏛️ *SAFU Velocity Leaderboard* 📈\n\n`;
@@ -253,6 +253,26 @@ bot.on('new_chat_members', async (ctx) => {
 
 bot.action(/verify:(.+)/, async (ctx) => { await SafeguardModule.handleVerification(ctx); });
 
-export const launchBot = () => bot.launch().then(() => console.log('SAFU Bot is running...'));
+bot.command('help', (ctx) => {
+  ctx.replyWithMarkdown(
+    `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
+    `• /setup - Launch the sniper setup wizard\n` +
+    `• /safu_trending - View velocity-based leaderboard\n` +
+    `• /help - Show this menu\n\n` +
+    `*SAFU V2 Precision:* Structural Buy Detection active. 🦾`
+  );
+});
+
+export const launchBot = () => {
+  // Set Quick Menu Commands
+  bot.telegram.setMyCommands([
+    { command: 'setup', description: '🛠️ Configure SAFU Sniper' },
+    { command: 'safu_trending', description: '📈 View Velocity Leaderboard' },
+    { command: 'help', description: '❓ Get Help & Info' }
+  ]);
+  
+  return bot.launch().then(() => console.log('SAFU Bot is running...'));
+};
+
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));

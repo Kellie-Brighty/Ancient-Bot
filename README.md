@@ -69,7 +69,8 @@ SAFU Bot is a high-performance, professional-grade Telegram community management
 1.  Add the bot to your Telegram group and make it an Admin.
 2.  Use `/setup` to launch the guided wizard.
 3.  Configure your chain, token, and premium visuals.
-4.  Ready to rock! 🛡️💎🦾
+4.  Use `/safu_trending` to view the velocity leaderboard.
+5.  Ready to rock! 🛡️💎🦾
 
 ## 🛡️ License
 

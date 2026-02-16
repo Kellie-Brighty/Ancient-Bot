@@ -5,6 +5,7 @@ export class SolWatcher {
   private connection: Connection;
   private activeSubscriptions: Map<string, number> = new Map();
   private alertCallback: ((alert: BuyAlert) => void) | null = null;
+  private processedSignatures: Set<string> = new Set();
 
   constructor() {
     const rpcUrl = process.env.SOL_RPC_URL;
@@ -21,23 +22,26 @@ export class SolWatcher {
 
   private async getVaultAddress(tokenMint: string): Promise<string | null> {
     try {
-      // 1. Check if it's a Pump.fun token
+      // 1. Check DexScreener FIRST (handles Raydium graduation)
+      const resp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`);
+      const data: any = await resp.json();
+      
+      // Look for Raydium or PumpSwap (Raydium graduated)
+      const raydiumPair = data.pairs?.find((p: any) => p.dexId === 'raydium' || p.dexId === 'pumpswap');
+      if (raydiumPair && raydiumPair.pairAddress) {
+        console.log(`🏛️  SAFU Watcher: Found Raydium/PumpSwap vault: ${raydiumPair.pairAddress}`);
+        return raydiumPair.pairAddress;
+      }
+
+      // 2. Fallback to Pump.fun Bonding Curve if still in early stages
       if (tokenMint.endsWith('pump')) {
         const PUMP_PROGRAM = new PublicKey('6EF8rrecthR5DkZJv99zz88BfN7m6WkJJrFvK3MvswH');
         const [bondingCurve] = PublicKey.findProgramAddressSync(
           [Buffer.from('bonding-curve'), new PublicKey(tokenMint).toBuffer()],
           PUMP_PROGRAM
         );
+        console.log(`🏛️  SAFU Watcher: Found Pump.fun Bonding Curve vault: ${bondingCurve.toString()}`);
         return bondingCurve.toString();
-      }
-
-      // 2. Otherwise, check DexScreener for Raydium Pair
-      const resp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`);
-      const data: any = await resp.json();
-      const pair = data.pairs?.find((p: any) => p.dexId === 'raydium');
-      
-      if (pair && pair.pairAddress) {
-        return pair.pairAddress;
       }
     } catch (e) {
       console.error('🏛️  SAFU Watcher: Vault discovery failed:', e);
@@ -67,13 +71,24 @@ export class SolWatcher {
         }
 
         try {
+          console.log(`🏛️  SAFU Watcher: Attaching listener to vault: ${vault}`);
           const subId = this.connection.onAccountChange(
             new PublicKey(vault),
             async () => {
               if (this.alertCallback) {
-                const signatures = await this.connection.getSignaturesForAddress(new PublicKey(vault), { limit: 1 });
-                if (signatures.length > 0) {
-                  this.processTransaction(signatures[0].signature, token, this.alertCallback);
+                // Fetch more to ensure we don't miss trades in high-speed blocks
+                const signatures = await this.connection.getSignaturesForAddress(new PublicKey(vault), { limit: 5 });
+                for (const sigInfo of signatures.reverse()) {
+                  if (!this.processedSignatures.has(sigInfo.signature)) {
+                    this.processedSignatures.add(sigInfo.signature);
+                    this.processTransaction(sigInfo.signature, token, this.alertCallback);
+                  }
+                }
+                
+                // Keep memory lean
+                if (this.processedSignatures.size > 2000) {
+                  const toKill = Array.from(this.processedSignatures).slice(0, 500);
+                  toKill.forEach(s => this.processedSignatures.delete(s));
                 }
               }
             },
