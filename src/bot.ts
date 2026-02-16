@@ -378,6 +378,32 @@ bot.action('enable_safeguard_final', async (ctx) => {
   }
 });
 
+bot.on('my_chat_member', async (ctx) => {
+  const oldStatus = ctx.myChatMember.old_chat_member.status;
+  const newStatus = ctx.myChatMember.new_chat_member.status;
+
+  if (oldStatus !== 'administrator' && newStatus === 'administrator') {
+    // Bot was promoted to admin!
+    await ctx.replyWithMarkdown(
+      `🏛️ *SAFU Bot is ready!* 🛡️\n\n` +
+      `I have been granted Admin powers. I'm now ready to handle security and intelligence for this community.\n\n` +
+      `🛡️ *Safeguard:* Human-only verification portal.\n` +
+      `📈 *Trending:* High-velocity momentum tracking.\n\n` +
+      `👉 *Admins:* Quick access below:`,
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback('🛡️ Portal Link', 'cmd_portal_welcome'),
+          Markup.button.callback('🛠️ Setup Sniper', 'cmd_setup')
+        ],
+        [
+          Markup.button.callback('📈 View Trending', 'cmd_trending_welcome'),
+          Markup.button.callback('❓ View Help', 'cmd_help_welcome')
+        ]
+      ])
+    );
+  }
+});
+
 bot.on('new_chat_members', async (ctx) => {
   const newMembers = (ctx.message as any).new_chat_members;
   const isBotAdded = newMembers.some((m: any) => m.id === ctx.botInfo.id);
