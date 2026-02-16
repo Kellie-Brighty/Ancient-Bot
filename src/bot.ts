@@ -6,6 +6,7 @@ import { SolWatcher } from './listeners/solWatcher';
 import { EthWatcher } from './listeners/ethWatcher';
 import { TrendingModule } from './modules/trending';
 import { ChainUtils } from './utils/chainUtils';
+import { PermissionUtils } from './utils/permissionUtils';
 import { Connection } from '@solana/web3.js';
 
 dotenv.config();
@@ -240,6 +241,12 @@ bot.start(async (ctx) => {
 
 bot.command('safu_portal', async (ctx) => {
   if (ctx.chat.type === 'private') return ctx.reply('❌ This command must be used inside a group.');
+  const isOwner = await PermissionUtils.isUserOwner(ctx);
+  if (!isOwner) return; // Silent fail for non-owners in group
+
+  const botAdmin = await PermissionUtils.isBotAdmin(ctx);
+  if (!botAdmin) return ctx.reply('⚠️ I need Administrator privileges to create a Safeguard Portal.');
+
   const botUsername = ctx.botInfo.username;
   const chatId = ctx.chat.id.toString();
   const portalLink = `https://t.me/${botUsername}?start=j_${chatId}`;
@@ -252,7 +259,16 @@ bot.command('safu_portal', async (ctx) => {
   );
 });
 
-bot.command('setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
+bot.command('setup', async (ctx) => {
+  if (ctx.chat.type !== 'private') {
+    const isOwner = await PermissionUtils.isUserOwner(ctx);
+    if (!isOwner) return; // Silent fail for non-owners in group
+    
+    const botAdmin = await PermissionUtils.isBotAdmin(ctx);
+    if (!botAdmin) return ctx.reply('⚠️ I need Administrator privileges to correctly configure this group.');
+  }
+  return (ctx as any).scene.enter('SETUP_WIZARD');
+});
 bot.command('safu_trending', async (ctx) => {
   const leaderboard = await TrendingModule.getLeaderboard(5);
   if (leaderboard.length === 0) return ctx.reply('🏛️ *SAFU Trending* 📈\nNo trades recorded yet.');
@@ -300,7 +316,13 @@ bot.on('channel_post', (ctx) => {
   console.log("🏛️  SAFU Debug: Channel ID Detected ->", ctx.chat.id);
 });
 
-bot.action('cmd_setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
+bot.action('cmd_setup', async (ctx) => {
+  if (ctx.chat?.type !== 'private') {
+    const isOwner = await PermissionUtils.isUserOwner(ctx);
+    if (!isOwner) return safeAnswer(ctx, '❌ Only the Group Owner can access setup.');
+  }
+  return (ctx as any).scene.enter('SETUP_WIZARD');
+});
 
 bot.action('cmd_trending_welcome', async (ctx) => {
   await safeAnswer(ctx);
@@ -332,6 +354,9 @@ bot.action('cmd_help_welcome', async (ctx) => {
 
 bot.action('cmd_portal_welcome', async (ctx) => {
   await safeAnswer(ctx);
+  const isOwner = await PermissionUtils.isUserOwner(ctx);
+  if (!isOwner) return ctx.reply('❌ Only the Group Owner can request the portal link.');
+  
   const chatId = ctx.chat?.id.toString();
   if (!chatId) return;
   const portalLink = `https://t.me/${ctx.botInfo.username}?start=j_${chatId}`;
@@ -343,6 +368,9 @@ bot.action('cmd_portal_welcome', async (ctx) => {
 });
 
 bot.action('enable_safeguard_final', async (ctx) => {
+  const isOwner = await PermissionUtils.isUserOwner(ctx);
+  if (!isOwner) return safeAnswer(ctx, '❌ Only the Group Owner can enable Safeguard.');
+
   const chatId = ctx.chat?.id.toString();
   if (chatId && groupConfigs[chatId]) {
     groupConfigs[chatId].safeguardEnabled = true;
@@ -356,12 +384,21 @@ bot.on('new_chat_members', async (ctx) => {
   const isBotAdded = newMembers.some((m: any) => m.id === ctx.botInfo.id);
 
   if (isBotAdded) {
+    const { isBotAdmin, isOwner } = await PermissionUtils.checkAdminAndOwner(ctx);
+
+    if (!isBotAdmin) {
+      return ctx.replyWithMarkdown(
+        `🏛️ *SAFU Bot has arrived!* 🛡️\n\n` +
+        `I am ready to protect this group, but I need **Administrator privileges** to function correctly.\n\n` +
+        `👉 *Owner:* Please promote me to Admin so I can enable Safeguard and Trending features.`
+      );
+    }
+
     await ctx.replyWithMarkdown(
-      `🏛️ *SAFU Bot has arrived!* 🛡️\n\n` +
-      `I am the ultimate security and intelligence suite for your community.\n\n` +
-      `🛡️ *Safeguard:* Human-only verification to block all portal bots.\n` +
-      `📈 *Trending:* Real-time velocity tracking and global leaderboard.\n` +
-      `🎯 *Sniper:* High-precision buy alerts on ETH & SOL.\n\n` +
+      `🏛️ *SAFU Bot is ready!* 🛡️\n\n` +
+      `I have been granted Admin powers. I'm now ready to handle security and intelligence for this community.\n\n` +
+      `🛡️ *Safeguard:* Human-only verification portal.\n` +
+      `📈 *Trending:* High-velocity momentum tracking.\n\n` +
       `👉 *Admins:* Quick access below:`,
       Markup.inlineKeyboard([
         [
