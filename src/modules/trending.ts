@@ -1,5 +1,6 @@
 import { BuyAlert } from '../types';
 import { FirestoreService } from './firestoreService';
+import { ChainUtils } from '../utils/chainUtils';
 
 interface Trade {
   tokenAddress: string;
@@ -15,12 +16,14 @@ export class TrendingModule {
   private static VELOCITY_WINDOW_MS = 60 * 60 * 1000;
 
   static async recordBuy(alert: BuyAlert) {
+    const actualChain = alert.chain || ChainUtils.identifyChain(alert.tokenAddress);
+
     const trade: Trade = {
       tokenAddress: alert.tokenAddress,
       amountUSD: alert.amountUSD,
       timestamp: alert.timestamp,
       symbol: alert.symbol,
-      chain: alert.chain
+      chain: actualChain
     };
 
     this.trades.push(trade);
@@ -33,7 +36,7 @@ export class TrendingModule {
       symbol: alert.symbol,
       score: score,
       lastUpdate: Date.now(),
-      chain: alert.chain
+      chain: actualChain
     });
   }
 

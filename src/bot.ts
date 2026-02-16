@@ -5,6 +5,7 @@ import { SafeguardModule } from './modules/safeguard';
 import { SolWatcher } from './listeners/solWatcher';
 import { EthWatcher } from './listeners/ethWatcher';
 import { TrendingModule } from './modules/trending';
+import { ChainUtils } from './utils/chainUtils';
 
 dotenv.config();
 
@@ -249,8 +250,10 @@ bot.command('safu_trending', async (ctx) => {
       maximumFractionDigits: 2
     });
 
-    const chainPath = token.chain === 'solana' ? 'solana' : 'ethereum';
-    const networkLabel = token.chain === 'solana' ? '🔹 SOL' : '🔹 ETH';
+    // Determine chain with fallback for legacy data
+    const actualChain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
+    const chainPath = actualChain === 'solana' ? 'solana' : 'ethereum';
+    const networkLabel = actualChain === 'solana' ? '🔹 SOL' : '🔹 ETH';
     const dexUrl = `https://dexscreener.com/${chainPath}/${token.tokenAddress}`;
     const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
     
