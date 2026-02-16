@@ -414,8 +414,11 @@ bot.on('new_chat_members', async (ctx) => {
     if (!isBotAdmin) {
       return ctx.replyWithMarkdown(
         `🏛️ *SAFU Bot has arrived!* 🛡️\n\n` +
-        `I am ready to protect this group, but I need **Administrator privileges** to function correctly.\n\n` +
-        `👉 *Owner:* Please promote me to Admin so I can enable Safeguard and Trending features.`
+        `I am the ultimate security and intelligence suite for your community, but I need **Administrator privileges** to function correctly.\n\n` +
+        `🛡️ *Safeguard:* Human-only verification portal.\n` +
+        `📈 *Trending:* High-velocity momentum tracking.\n` +
+        `🎯 *Sniper:* High-precision buy alerts on ETH & SOL.\n\n` +
+        `👉 *Owner:* Please promote me to Admin to unlock these features!`
       );
     }
 
