@@ -24,6 +24,19 @@ export class PermissionUtils {
     }
   }
 
+  static async isAdminOrOwner(ctx: Context, userId?: number): Promise<boolean> {
+    if (ctx.chat?.type === 'private') return true;
+    const targetId = userId || ctx.from?.id;
+    if (!targetId) return false;
+
+    try {
+      const member = await ctx.getChatMember(targetId);
+      return member.status === 'administrator' || member.status === 'creator';
+    } catch (e) {
+      return false;
+    }
+  }
+
   static async checkAdminAndOwner(ctx: Context): Promise<{ isBotAdmin: boolean, isOwner: boolean }> {
     const [botAdmin, userOwner] = await Promise.all([
       this.isBotAdmin(ctx),

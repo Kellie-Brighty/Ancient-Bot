@@ -428,6 +428,31 @@ bot.on('new_chat_members', async (ctx) => {
 
 bot.action(/verify:(.+)/, async (ctx) => { await SafeguardModule.handleVerification(ctx); });
 
+// --- Link Filtering (Admin Exempt) ---
+bot.on('message', async (ctx, next) => {
+  if (ctx.chat?.type === 'private') return next();
+  
+  const msg = ctx.message as any;
+  const hasLink = (msg.entities || []).some((e: any) => e.type === 'url' || e.type === 'text_link') ||
+                  (msg.caption_entities || []).some((e: any) => e.type === 'url' || e.type === 'text_link') ||
+                  (msg.text && (msg.text.includes('http://') || msg.text.includes('https://') || msg.text.includes('t.me/')));
+
+  if (hasLink) {
+    const isImmune = await PermissionUtils.isAdminOrOwner(ctx);
+    if (!isImmune) {
+      try {
+        await ctx.deleteMessage();
+        console.log(`🛡️ SAFU Link Filter: Deleted link from non-admin ${ctx.from?.id} in ${ctx.chat?.id}`);
+        // Optional: Send a silent warning or just disappear the link (cleaner)
+        return; 
+      } catch (e) {
+        console.warn('SAFU: Failed to delete link (Insufficient permissions?)');
+      }
+    }
+  }
+  return next();
+});
+
 bot.command('help', (ctx) => {
   ctx.replyWithMarkdown(
     `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
