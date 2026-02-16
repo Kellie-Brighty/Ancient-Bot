@@ -231,7 +231,7 @@ bot.command('safu_trending', async (ctx) => {
   const leaderboard = await TrendingModule.getLeaderboard(5);
   if (leaderboard.length === 0) return ctx.reply('🏛️ *SAFU Trending* 📈\nNo trades recorded yet.');
   
-  let message = `🏛️ *SAFU Velocity Leaderboard* 📈\n\n`;
+  let message = `🏛️ *SAFU Trending* 📈\n\n`;
   const now = Date.now();
 
   leaderboard.forEach((token, index) => {
@@ -290,7 +290,7 @@ bot.command('help', (ctx) => {
   ctx.replyWithMarkdown(
     `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
     `• /setup - Launch the sniper setup wizard\n` +
-    `• /safu_trending - View velocity-based leaderboard\n` +
+    `• /safu_trending - View the trending leaderboard\n` +
     `• /help - Show this menu\n\n` +
     `*SAFU V2 Precision:* Structural Buy Detection active. 🦾`
   );
@@ -300,7 +300,7 @@ export const launchBot = () => {
   // Set Quick Menu Commands
   bot.telegram.setMyCommands([
     { command: 'setup', description: '🛠️ Configure SAFU Sniper' },
-    { command: 'safu_trending', description: '📈 View Velocity Leaderboard' },
+    { command: 'safu_trending', description: '📈 View Trending Leaderboard' },
     { command: 'help', description: '❓ Get Help & Info' }
   ]);
   
