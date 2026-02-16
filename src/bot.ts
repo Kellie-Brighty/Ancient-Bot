@@ -236,7 +236,6 @@ bot.start(async (ctx) => {
       ])
     );
   }
-  ctx.replyWithMarkdown(`🏛️ *SAFU Bot Active* 🏛️\n\nUse /setup to launch the configuration wizard.`, Markup.inlineKeyboard([[Markup.button.callback('🛠️ Launch Setup', 'cmd_setup')]]));
 });
 
 bot.command('safu_portal', async (ctx) => {
