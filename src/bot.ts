@@ -238,6 +238,20 @@ bot.start(async (ctx) => {
   ctx.replyWithMarkdown(`🏛️ *SAFU Bot Active* 🏛️\n\nUse /setup to launch the configuration wizard.`, Markup.inlineKeyboard([[Markup.button.callback('🛠️ Launch Setup', 'cmd_setup')]]));
 });
 
+bot.command('safu_portal', async (ctx) => {
+  if (ctx.chat.type === 'private') return ctx.reply('❌ This command must be used inside a group.');
+  const botUsername = ctx.botInfo.username;
+  const chatId = ctx.chat.id.toString();
+  const portalLink = `https://t.me/${botUsername}?start=j_${chatId}`;
+  
+  ctx.replyWithMarkdown(
+    `🛡️ *SAFU Safeguard Portal* 🏛️\n\n` +
+    `Use this link to safely invite members. They will be verified in my DMs before joining the group.\n\n` +
+    `🔗 *Portal Link:* \`${portalLink}\`\n\n` +
+    `_Copy and share this link to block all bots!_`
+  );
+});
+
 bot.command('setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
 bot.command('safu_trending', async (ctx) => {
   const leaderboard = await TrendingModule.getLeaderboard(5);
@@ -287,6 +301,47 @@ bot.on('channel_post', (ctx) => {
 });
 
 bot.action('cmd_setup', (ctx) => (ctx as any).scene.enter('SETUP_WIZARD'));
+
+bot.action('cmd_trending_welcome', async (ctx) => {
+  await safeAnswer(ctx);
+  const leaderboard = await TrendingModule.getLeaderboard(5);
+  if (leaderboard.length === 0) return ctx.reply('🏛️ *SAFU Trending* 📈\nNo trades recorded yet.');
+  let message = `🏛️ *SAFU Trending* 📈\n\n`;
+  const now = Date.now();
+  leaderboard.forEach((token, index) => {
+    const formattedMomentum = token.score.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const actualChain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
+    const networkLabel = actualChain === 'solana' ? '🔹 SOL' : '🔹 ETH';
+    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
+    message += `${medal} *${token.symbol}* (${networkLabel})\n   • *Momentum:* \`$${formattedMomentum}/min\`\n   • *CA:* \`${token.tokenAddress}\`\n\n`;
+  });
+  ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any);
+});
+
+bot.action('cmd_help_welcome', async (ctx) => {
+  await safeAnswer(ctx);
+  ctx.replyWithMarkdown(
+    `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
+    `• /setup - Launch the sniper setup wizard\n` +
+    `• /safu_trending - View the trending leaderboard\n` +
+    `• /safu_portal - Get your Safeguard portal link\n` +
+    `• /help - Show this menu\n\n` +
+    `*SAFU V2 Precision:* Structural Buy Detection active. 🦾`
+  );
+});
+
+bot.action('cmd_portal_welcome', async (ctx) => {
+  await safeAnswer(ctx);
+  const chatId = ctx.chat?.id.toString();
+  if (!chatId) return;
+  const portalLink = `https://t.me/${ctx.botInfo.username}?start=j_${chatId}`;
+  ctx.replyWithMarkdown(
+    `🛡️ *SAFU Safeguard Portal* 🏛️\n\n` +
+    `🔗 *Portal Link:* \`${portalLink}\`\n\n` +
+    `_Admins can share this link to ensure only verified humans enter the group._`
+  );
+});
+
 bot.action('enable_safeguard_final', async (ctx) => {
   const chatId = ctx.chat?.id.toString();
   if (chatId && groupConfigs[chatId]) {
@@ -303,9 +358,21 @@ bot.on('new_chat_members', async (ctx) => {
   if (isBotAdded) {
     await ctx.replyWithMarkdown(
       `🏛️ *SAFU Bot has arrived!* 🛡️\n\n` +
-      `I'm ready to protect this group and track trending momentum.\n\n` +
-      `👉 *Admins:* Use /setup to configure your sniper and premium visuals!`,
-      Markup.inlineKeyboard([[Markup.button.callback('🛠️ Launch Setup', 'cmd_setup')]])
+      `I am the ultimate security and intelligence suite for your community.\n\n` +
+      `🛡️ *Safeguard:* Human-only verification to block all portal bots.\n` +
+      `📈 *Trending:* Real-time velocity tracking and global leaderboard.\n` +
+      `🎯 *Sniper:* High-precision buy alerts on ETH & SOL.\n\n` +
+      `👉 *Admins:* Quick access below:`,
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback('🛡️ Portal Link', 'cmd_portal_welcome'),
+          Markup.button.callback('🛠️ Setup Sniper', 'cmd_setup')
+        ],
+        [
+          Markup.button.callback('📈 View Trending', 'cmd_trending_welcome'),
+          Markup.button.callback('❓ View Help', 'cmd_help_welcome')
+        ]
+      ])
     );
   }
   await SafeguardModule.handleNewMember(ctx);
@@ -328,6 +395,7 @@ export const launchBot = () => {
   bot.telegram.setMyCommands([
     { command: 'setup', description: '🛠️ Configure SAFU Sniper' },
     { command: 'safu_trending', description: '📈 View Trending Leaderboard' },
+    { command: 'safu_portal', description: '🛡️ Get Safeguard Portal Link' },
     { command: 'help', description: '❓ Get Help & Info' }
   ]);
   
