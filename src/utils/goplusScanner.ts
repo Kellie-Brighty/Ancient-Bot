@@ -18,26 +18,100 @@ export class GoPlusScanner {
    * @param chain - 'eth' or 'solana'.
    */
   static async scan(tokenAddress: string, chain: 'eth' | 'solana'): Promise<SecurityResult> {
+    // For Solana, try RugCheck first (better coverage), then GoPlus fallback
+    if (chain === 'solana') {
+      const rugResult = await this.scanWithRugCheck(tokenAddress);
+      if (rugResult) return rugResult;
+    }
+
+    // GoPlus scan (primary for ETH, fallback for SOL)
+    return this.scanWithGoPlus(tokenAddress, chain);
+  }
+
+  /**
+   * RugCheck.xyz scanner for Solana tokens (better SPL coverage).
+   */
+  private static async scanWithRugCheck(tokenAddress: string): Promise<SecurityResult | null> {
+    const url = `https://api.rugcheck.xyz/v1/tokens/${tokenAddress}/report/summary`;
+    try {
+      console.log(`🛡️ RugCheck: Scanning SOL token: ${tokenAddress}`);
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) {
+        console.log(`🛡️ RugCheck: HTTP ${res.status} — falling back to GoPlus`);
+        return null;
+      }
+
+      const data = await res.json();
+      console.log(`🛡️ RugCheck: Response received. Score: ${data.score}, Risks: ${data.risks?.length || 0}`);
+
+      const risks: string[] = [];
+
+      // Parse RugCheck risk array
+      if (data.risks && Array.isArray(data.risks)) {
+        for (const risk of data.risks) {
+          const name = risk.name || risk.description || 'Unknown risk';
+          const level = risk.level || '';
+          if (level === 'danger' || level === 'critical') {
+            risks.push(`🚨 ${name}`);
+          } else if (level === 'warn' || level === 'warning') {
+            risks.push(`⚠️ ${name}`);
+          }
+        }
+      }
+
+      // Determine score
+      const hasCritical = risks.some(r => r.includes('🚨'));
+      let score: SecurityResult['score'] = 'SAFE';
+      let summary = '✅ Contract looks clean. No major risks detected.';
+
+      if (risks.length > 0 && !hasCritical) {
+        score = 'CAUTION';
+        summary = `⚠️ ${risks.length} risk(s) found. Proceed with caution.`;
+      }
+      if (hasCritical) {
+        score = 'DANGER';
+        summary = `🚨 CRITICAL RISK DETECTED. This token may be malicious.`;
+      }
+
+      return { isSafe: risks.length === 0, risks, score, summary };
+    } catch (error) {
+      console.error('🛡️ RugCheck Error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * GoPlus scanner (primary for ETH).
+   */
+  private static async scanWithGoPlus(tokenAddress: string, chain: 'eth' | 'solana'): Promise<SecurityResult> {
     const chainId = chain === 'eth' ? '1' : 'solana';
     const url = `${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${tokenAddress}`;
 
     try {
+      console.log(`🛡️ GoPlus: Scanning ${chain.toUpperCase()} token: ${tokenAddress}`);
+      console.log(`🛡️ GoPlus: URL -> ${url}`);
+
       const res = await fetch(url, {
         headers: { 'Accept': 'application/json' }
       });
 
       const data = await res.json();
+      console.log(`🛡️ GoPlus: Response code=${data.code}, message=${data.message || 'none'}`);
+      console.log(`🛡️ GoPlus: Raw result keys:`, data.result ? Object.keys(data.result) : 'NO RESULT');
 
       if (data.code !== 1 || !data.result) {
+        console.log(`🛡️ GoPlus: No valid response. Full body:`, JSON.stringify(data).substring(0, 500));
         return { isSafe: true, risks: [], score: 'SAFE', summary: '✅ No data available (new token?)' };
       }
 
       const key = Object.keys(data.result)[0];
       if (!key) {
+        console.log(`🛡️ GoPlus: Result object empty. Token may be too new.`);
         return { isSafe: true, risks: [], score: 'SAFE', summary: '✅ No data available' };
       }
 
       const token = data.result[key];
+      console.log(`🛡️ GoPlus: Token data found. Keys:`, Object.keys(token).join(', '));
       const risks: string[] = [];
 
       // --- ETH-specific checks ---
@@ -49,6 +123,16 @@ export class GoPlusScanner {
         if (token.is_blacklisted === '1') risks.push('🚫 Has Blacklist function');
         if (token.cannot_sell_all === '1') risks.push('📉 Cannot sell all tokens');
         if (token.trading_cooldown === '1') risks.push('⏳ Trading cooldown enabled');
+        if (token.hidden_owner === '1') risks.push('👤 Hidden Owner detected');
+        if (token.selfdestruct === '1') risks.push('💀 Contract can self-destruct');
+        if (token.transfer_pausable === '1') risks.push('⏸️ Transfers can be paused');
+        if (token.is_proxy === '1') risks.push('🔄 Upgradeable proxy contract');
+        if (token.external_call === '1') risks.push('📡 External contract calls');
+        if (token.slippage_modifiable === '1') risks.push('📊 Slippage can be modified');
+        if (token.personal_slippage_modifiable === '1') risks.push('🎯 Per-user slippage control');
+        if (token.is_anti_whale === '1') risks.push('🐋 Anti-whale limits active');
+        if (token.is_whitelisted === '1') risks.push('📋 Has Whitelist function');
+        if (token.cannot_buy === '1') risks.push('🚫 Cannot buy this token');
 
         const buyTax = parseFloat(token.buy_tax || '0');
         const sellTax = parseFloat(token.sell_tax || '0');
@@ -66,7 +150,10 @@ export class GoPlusScanner {
       }
 
       // --- Determine score ---
-      const hasCritical = risks.some(r => r.includes('Honeypot') || r.includes('change balances') || r.includes('reclaimed'));
+      const hasCritical = risks.some(r => 
+        r.includes('Honeypot') || r.includes('change balances') || r.includes('reclaimed') ||
+        r.includes('self-destruct') || r.includes('Cannot Sell') || r.includes('Cannot buy')
+      );
       let score: SecurityResult['score'] = 'SAFE';
       let summary = '✅ Contract looks clean. No major risks detected.';
 
