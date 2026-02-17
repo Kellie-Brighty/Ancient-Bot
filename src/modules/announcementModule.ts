@@ -1,6 +1,7 @@
 import { Telegraf } from 'telegraf';
 import { TrendingModule } from './trending';
 import { ChainUtils } from '../utils/chainUtils';
+import { GoPlusScanner } from '../utils/goplusScanner';
 
 export class AnnouncementModule {
   private static bot: Telegraf;
@@ -35,7 +36,7 @@ export class AnnouncementModule {
     let message = `🔥 *SAFU GLOBAL TRENDING* 🔥\n\n`;
     const now = Date.now();
 
-    leaderboard.forEach((token, index) => {
+    for (const [index, token] of leaderboard.entries()) {
       const diffSeconds = Math.floor((now - token.lastUpdate) / 1000);
       const diffMinutes = Math.floor(diffSeconds / 60);
       
@@ -54,12 +55,22 @@ export class AnnouncementModule {
       const actualChain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
       const networkLabel = actualChain === 'solana' ? '🔹 SOL' : '🔹 ETH';
       const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
+
+      // Security scan badge
+      const scanResult = await GoPlusScanner.scan(token.tokenAddress, actualChain);
+      const badge = GoPlusScanner.getBadge(scanResult);
+      const titleBadge = badge ? ` ${badge}` : '';
       
-      message += `${medal} *${token.symbol}* (${networkLabel})\n` +
+      message += `${medal} *${token.symbol}* (${networkLabel})${titleBadge}\n` +
                  `   • *Momentum:* \`$${formattedMomentum}/min\`\n` +
                  `   • *Status:* \`${timeAgo}\`\n` +
-                 `   • *CA:* \`${token.tokenAddress}\`\n\n`;
-    });
+                 `   • *CA:* \`${token.tokenAddress}\`\n`;
+
+      if (scanResult.risks.length > 0) {
+        message += `   • *Risks:* ${scanResult.risks.join(', ')}\n`;
+      }
+      message += `\n`;
+    }
 
     message += `_Momentum = "Speed of Money". Higher = Faster Buy Interest!_ 🦾\n` +
                `👉 [Add SAFU to your Group](https://t.me/${(this.bot as any).botInfo?.username}?startgroup=true)`;

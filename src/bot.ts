@@ -7,6 +7,7 @@ import { EthWatcher } from './listeners/ethWatcher';
 import { TrendingModule } from './modules/trending';
 import { ChainUtils } from './utils/chainUtils';
 import { PermissionUtils } from './utils/permissionUtils';
+import { GoPlusScanner } from './utils/goplusScanner';
 import { Connection } from '@solana/web3.js';
 
 dotenv.config();
@@ -56,6 +57,15 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     if (tokenAddress.length < 32) return ctx.reply('❌ Invalid address. Please try again.');
     
     (ctx.wizard.state as any).tokenAddress = tokenAddress;
+
+    // --- Run Security Scan ---
+    const chain = (ctx.wizard.state as any).chain || 'eth';
+    await ctx.reply('🔍 *Scanning contract integrity...*', { parse_mode: 'Markdown' });
+    const scanResult = await GoPlusScanner.scan(tokenAddress, chain);
+    (ctx.wizard.state as any).securityScore = scanResult.score;
+
+    await ctx.replyWithMarkdown(GoPlusScanner.formatResult(scanResult));
+
     await ctx.reply('🏛️ *Step 3: Custom Emoji*\n\nSend a **single emoji** for the buy progress bar, or click Skip.', 
       Markup.inlineKeyboard([[Markup.button.callback('⏩ Skip Emoji', 'skip_emoji')]]));
     return ctx.wizard.next();
@@ -275,7 +285,7 @@ bot.command('safu_trending', async (ctx) => {
   let message = `🏛️ *SAFU Trending* 📈\n\n`;
   const now = Date.now();
 
-  leaderboard.forEach((token, index) => {
+  for (const [index, token] of leaderboard.entries()) {
     const diffSeconds = Math.floor((now - token.lastUpdate) / 1000);
     const diffMinutes = Math.floor(diffSeconds / 60);
     
@@ -291,20 +301,28 @@ bot.command('safu_trending', async (ctx) => {
       maximumFractionDigits: 2
     });
 
-    // Determine chain with fallback for legacy data
     const actualChain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
     const chainPath = actualChain === 'solana' ? 'solana' : 'ethereum';
     const networkLabel = actualChain === 'solana' ? '🔹 SOL' : '🔹 ETH';
     const dexUrl = `https://dexscreener.com/${chainPath}/${token.tokenAddress}`;
     const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
+
+    // Security scan badge
+    const scanResult = await GoPlusScanner.scan(token.tokenAddress, actualChain);
+    const badge = GoPlusScanner.getBadge(scanResult);
+    const titleBadge = badge ? ` ${badge}` : '';
     
-    // Using <code> for tap-to-copy address in Telegram
-    message += `${medal} *${token.symbol}* (${networkLabel})\n` +
+    message += `${medal} *${token.symbol}* (${networkLabel})${titleBadge}\n` +
                `   • *Momentum:* \`$${formattedMomentum}/min\`\n` +
                `   • *Status:* \`${timeAgo}\`\n` +
                `   • *CA:* \`${token.tokenAddress}\`\n` +
-               `   • 📊 [DexScreener](${dexUrl})\n\n`;
-  });
+               `   • 📊 [DexScreener](${dexUrl})\n`;
+
+    if (scanResult.risks.length > 0) {
+      message += `   • *Risks:* ${scanResult.risks.join(', ')}\n`;
+    }
+    message += `\n`;
+  }
   
   message += `_Momentum = The "Speed of Money". It's how much USD is being spent on this token every minute. Higher = More buy interest right now!_`;
   ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any);
