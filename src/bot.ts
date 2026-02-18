@@ -1,7 +1,7 @@
 import { Telegraf, Context, Markup, Scenes, session } from 'telegraf';
 import * as dotenv from 'dotenv';
 import type { GroupConfig, BuyAlert } from './types/index';
-import { SafeguardModule } from './modules/safeguard';
+
 import { SolWatcher } from './listeners/solWatcher';
 import { EthWatcher } from './listeners/ethWatcher';
 import { TrendingModule } from './modules/trending';
@@ -164,7 +164,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
         tokenAddress: state.tokenAddress,
         buyEmoji: state.buyEmoji,
         buyMedia: state.buyMedia,
-        safeguardEnabled: false, welcomeMessage: '', minBuyAmount: 0
+        minBuyAmount: 0
       };
       syncBuyMonitor();
     }
@@ -244,7 +244,7 @@ setupWizard.action('finish_wizard', async (ctx) => {
       tokenAddress: state.tokenAddress,
       buyEmoji: state.buyEmoji,
       buyMedia: state.buyMedia,
-      safeguardEnabled: false, welcomeMessage: '', minBuyAmount: 0
+      minBuyAmount: 0
     };
     syncBuyMonitor();
   }
@@ -355,30 +355,12 @@ bot.start(async (ctx) => {
   }
 });
 
-bot.command('safu_portal', async (ctx) => {
-  if (ctx.chat.type === 'private') return ctx.reply('❌ This command must be used inside a group.');
-  const isOwner = await PermissionUtils.isUserOwner(ctx);
-  if (!isOwner) return; // Silent fail for non-owners in group
 
-  const botAdmin = await PermissionUtils.isBotAdmin(ctx);
-  if (!botAdmin) return ctx.reply('⚠️ I need Administrator privileges to create a Safeguard Portal.');
-
-  const botUsername = ctx.botInfo.username;
-  const chatId = ctx.chat.id.toString();
-  const portalLink = `https://t.me/${botUsername}?start=j_${chatId}`;
-  
-  ctx.replyWithMarkdown(
-    `🛡️ *SAFU Safeguard Portal* 🏛️\n\n` +
-    `Use this link to safely invite members. They will be verified in my DMs before joining the group.\n\n` +
-    `🔗 *Portal Link:* \`${portalLink}\`\n\n` +
-    `_Copy and share this link to block all bots!_`
-  );
-});
 
 bot.command('setup', async (ctx) => {
   if (ctx.chat.type !== 'private') {
-    const isOwner = await PermissionUtils.isUserOwner(ctx);
-    if (!isOwner) return; // Silent fail for non-owners in group
+    const isAdmin = await PermissionUtils.isAdminOrOwner(ctx);
+    if (!isAdmin) return; // Silent fail for non-admins in group
     
     const botAdmin = await PermissionUtils.isBotAdmin(ctx);
     if (!botAdmin) return ctx.reply('⚠️ I need Administrator privileges to correctly configure this group.');
@@ -442,8 +424,8 @@ bot.on('channel_post', (ctx) => {
 
 bot.action('cmd_setup', async (ctx) => {
   if (ctx.chat?.type !== 'private') {
-    const isOwner = await PermissionUtils.isUserOwner(ctx);
-    if (!isOwner) return safeAnswer(ctx, '❌ Only the Group Owner can access setup.');
+    const isAdmin = await PermissionUtils.isAdminOrOwner(ctx);
+    if (!isAdmin) return safeAnswer(ctx, '❌ Only Group Admins can access setup.');
   }
   return (ctx as any).scene.enter('SETUP_WIZARD');
 });
@@ -470,38 +452,12 @@ bot.action('cmd_help_welcome', async (ctx) => {
     `🏛️ *SAFU Bot Help Menu* 🛡️\n\n` +
     `• /setup - Launch the buy monitor setup wizard\n` +
     `• /safu_trending - View the trending leaderboard\n` +
-    `• /safu_portal - Get your Safeguard portal link\n` +
     `• /help - Show this menu\n\n` +
     `*SAFU V2 Precision:* Structural Buy Detection active. 🦾`
   );
 });
 
-bot.action('cmd_portal_welcome', async (ctx) => {
-  await safeAnswer(ctx);
-  const isOwner = await PermissionUtils.isUserOwner(ctx);
-  if (!isOwner) return ctx.reply('❌ Only the Group Owner can request the portal link.');
-  
-  const chatId = ctx.chat?.id.toString();
-  if (!chatId) return;
-  const portalLink = `https://t.me/${ctx.botInfo.username}?start=j_${chatId}`;
-  ctx.replyWithMarkdown(
-    `🛡️ *SAFU Safeguard Portal* 🏛️\n\n` +
-    `🔗 *Portal Link:* \`${portalLink}\`\n\n` +
-    `_Admins can share this link to ensure only verified humans enter the group._`
-  );
-});
 
-bot.action('enable_safeguard_final', async (ctx) => {
-  const isOwner = await PermissionUtils.isUserOwner(ctx);
-  if (!isOwner) return safeAnswer(ctx, '❌ Only the Group Owner can enable Safeguard.');
-
-  const chatId = ctx.chat?.id.toString();
-  if (chatId && groupConfigs[chatId]) {
-    groupConfigs[chatId].safeguardEnabled = true;
-    await safeAnswer(ctx, 'Safeguard Enabled! 🛡️');
-    ctx.reply('✅ *SAFU Safeguard Active.*');
-  }
-});
 
 bot.on('my_chat_member', async (ctx) => {
   const oldStatus = ctx.myChatMember.old_chat_member.status;
@@ -511,18 +467,16 @@ bot.on('my_chat_member', async (ctx) => {
     // Bot was promoted to admin!
     await ctx.replyWithMarkdown(
       `🏛️ *SAFU Bot is ready!* 🛡️\n\n` +
-      `I have been granted Admin powers. I'm now ready to handle security and intelligence for this community.\n\n` +
-      `🛡️ *Safeguard:* Human-only verification portal.\n` +
+      `I have been granted Admin powers. I'm now ready to power this community.\n\n` +
       `📈 *Trending:* High-velocity momentum tracking.\n` +
       `🎯 *Buy Monitor:* High-precision buy alerts on ETH & SOL.\n\n` +
       `👉 *Admins:* Quick access below:`,
       Markup.inlineKeyboard([
         [
-          Markup.button.callback('🛡️ Portal Link', 'cmd_portal_welcome'),
-          Markup.button.callback('🛠️ Setup Monitor', 'cmd_setup')
+          Markup.button.callback('🛠️ Setup Monitor', 'cmd_setup'),
+          Markup.button.callback('📈 View Trending', 'cmd_trending_welcome')
         ],
         [
-          Markup.button.callback('📈 View Trending', 'cmd_trending_welcome'),
           Markup.button.callback('❓ View Help', 'cmd_help_welcome')
         ]
       ])
@@ -535,23 +489,19 @@ bot.on('new_chat_members', async (ctx) => {
   const isBotAdded = newMembers.some((m: any) => m.id === ctx.botInfo.id);
 
   if (isBotAdded) {
-    const { isBotAdmin, isOwner } = await PermissionUtils.checkAdminAndOwner(ctx);
+    const { isBotAdmin } = await PermissionUtils.checkAdminAndOwner(ctx);
 
     if (!isBotAdmin) {
       return ctx.replyWithMarkdown(
         `🏛️ *SAFU Bot has arrived!* 🛡️\n\n` +
-        `I am the ultimate security and intelligence suite for your community, but I need **Administrator privileges** to function correctly.\n\n` +
-        `🛡️ *Safeguard:* Human-only verification portal.\n` +
+        `I need **Administrator privileges** to function correctly.\n\n` +
         `📈 *Trending:* High-velocity momentum tracking.\n` +
         `🎯 *Buy Monitor:* High-precision buy alerts on ETH & SOL.\n\n` +
-        `👉 *Owner:* Please promote me to Admin to unlock these features!`
+        `👉 *Admin:* Please promote me to Admin to unlock these features!`
       );
     }
   }
-  await SafeguardModule.handleNewMember(ctx);
 });
-
-bot.action(/verify:(.+)/, async (ctx) => { await SafeguardModule.handleVerification(ctx); });
 
 // --- Link Filtering (Admin Exempt) ---
 bot.on('message', async (ctx, next) => {
@@ -593,7 +543,6 @@ export const launchBot = () => {
   bot.telegram.setMyCommands([
     { command: 'setup', description: '🛠️ Configure SAFU Buy Monitor' },
     { command: 'safu_trending', description: '📈 View Trending Leaderboard' },
-    { command: 'safu_portal', description: '🛡️ Get Safeguard Portal Link' },
     { command: 'help', description: '❓ Get Help & Info' }
   ]);
   

@@ -5,8 +5,6 @@ export interface GroupConfig {
   chain: Chain;
   tokenAddress: string;
   minBuyAmount: number; // in USD
-  safeguardEnabled: boolean;
-  welcomeMessage: string;
   buyEmoji?: string;
   buyMedia?: {
     fileId: string;
@@ -14,13 +12,6 @@ export interface GroupConfig {
   };
 }
 
-export interface UserVerification {
-  userId: number;
-  chatId: number;
-  isVerified: boolean;
-  joinedAt: number;
-  captchaMessageId?: number;
-}
 
 export interface TrendingToken {
   tokenAddress: string;
