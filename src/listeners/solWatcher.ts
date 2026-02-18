@@ -112,7 +112,7 @@ export class SolWatcher {
         return {
           symbol: pair.baseToken.symbol,
           priceUsd: parseFloat(pair.priceUsd) || 0,
-          marketCap: pair.fdv ? (pair.fdv >= 1e9 ? `$${(pair.fdv/1e9).toFixed(2)}B` : pair.fdv >= 1e6 ? `$${(pair.fdv/1e6).toFixed(2)}M` : `$${(pair.fdv/1000).toFixed(1)}K`) : 'Unknown'
+          marketCap: pair.fdv ? `$${Math.round(pair.fdv).toLocaleString('en-US')}` : 'Unknown'
         };
       }
     } catch (e) {

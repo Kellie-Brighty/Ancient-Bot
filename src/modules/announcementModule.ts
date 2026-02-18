@@ -80,16 +80,52 @@ export class AnnouncementModule {
 
     if (cleanTokens.length === 0) return;
 
+    // Lazy-import to avoid circular deps
+    const { groupConfigs } = await import('../bot');
+
     const lines: string[] = [];
     for (const [i, token] of cleanTokens.entries()) {
       if (i >= 10) break;
-      const mcap = token.score >= 1000000
-        ? `${(token.score / 1000000).toFixed(1)}M`
-        : token.score >= 1000
-          ? `${(token.score / 1000).toFixed(1)}K`
-          : token.score.toFixed(0);
+
+      // Fetch live market cap from DexScreener
+      let mcapStr = '';
+      try {
+        const resp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.tokenAddress}`);
+        const data: any = await resp.json();
+        const pair = data.pairs?.[0];
+        if (pair?.fdv) {
+          const fdv = pair.fdv;
+          mcapStr = fdv >= 1e9 ? `$${(fdv/1e9).toFixed(1)}B` : fdv >= 1e6 ? `$${(fdv/1e6).toFixed(1)}M` : `$${(fdv/1000).toFixed(1)}K`;
+        }
+      } catch (e) { /* ignore */ }
+
+      // Find the group that has this token and get invite link
+      let groupLink = '';
+      try {
+        const groupEntry = Object.entries(groupConfigs).find(
+          ([_, config]) => config.tokenAddress?.toLowerCase() === token.tokenAddress.toLowerCase()
+        );
+        if (groupEntry) {
+          const chat = await this.bot.telegram.getChat(groupEntry[0]);
+          if ('invite_link' in chat && chat.invite_link) {
+            groupLink = chat.invite_link;
+          } else if ('username' in chat && chat.username) {
+            groupLink = `https://t.me/${chat.username}`;
+          } else {
+            // Try to export an invite link
+            try {
+              groupLink = await this.bot.telegram.exportChatInviteLink(groupEntry[0]);
+            } catch (e) { /* no permission to create link */ }
+          }
+        }
+      } catch (e) { /* ignore */ }
+
+      const symbol = groupLink 
+        ? `[${token.symbol}](${groupLink})`
+        : token.symbol;
       
-      lines.push(`${positionEmojis[i]}  ${token.symbol}    $${mcap}/m ✅`);
+      const mcapDisplay = mcapStr ? `  ${mcapStr}` : '';
+      lines.push(`${positionEmojis[i]}  ${symbol}${mcapDisplay} ✅`);
     }
 
     const botUsername = (this.bot as any).botInfo?.username || 'SAFUBot';

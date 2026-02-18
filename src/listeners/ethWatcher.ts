@@ -110,7 +110,7 @@ export class EthWatcher {
                 amountToken: amountTokenStr,
                 amountNative: `${solSpent.toFixed(4)} ETH`,
                 amountUSD: solSpent * (parseFloat(freshPair.priceUsd) / (parseFloat(freshPair.priceNative) || 1)),
-                marketCap: freshPair.fdv ? this.formatMarketCap(freshPair.fdv) : 'Unknown',
+                marketCap: freshPair.fdv ? `$${Math.round(freshPair.fdv).toLocaleString('en-US')}` : 'Unknown',
                 buyer: to,
                 txnHash: event.log.transactionHash,
                 chain: 'eth',
@@ -131,11 +131,5 @@ export class EthWatcher {
         }
       }
     }
-  }
-
-  private formatMarketCap(fdv: number): string {
-    if (fdv >= 1_000_000_000) return `$${(fdv / 1_000_000_000).toFixed(2)}B`;
-    if (fdv >= 1_000_000) return `$${(fdv / 1_000_000).toFixed(2)}M`;
-    return `$${(fdv / 1000).toFixed(1)}K`;
   }
 }

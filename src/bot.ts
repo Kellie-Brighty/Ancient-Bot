@@ -21,7 +21,7 @@ const solWatcher = new SolWatcher();
 const ethWatcher = new EthWatcher();
 
 // In-memory config
-const groupConfigs: Record<string, GroupConfig> = {};
+export const groupConfigs: Record<string, GroupConfig> = {};
 
 // --- Scenes & Session ---
 interface WizardSession extends Scenes.WizardSessionData {
