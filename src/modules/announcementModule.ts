@@ -85,28 +85,30 @@ export class AnnouncementModule {
       `🟢 @${botUsername} updates trending every trade`;
 
     try {
-      // Send new leaderboard
-      const sent = await this.bot.telegram.sendMessage(this.channelId, message, {
-        parse_mode: 'Markdown',
-        link_preview_options: { is_disabled: true }
-      } as any);
-
-      // Pin new message (silently)
-      await this.bot.telegram.pinChatMessage(this.channelId, sent.message_id, {
-        disable_notification: true
-      } as any);
-
-      // Unpin old message
       if (this.lastPinnedMessageId) {
-        try {
-          await this.bot.telegram.unpinChatMessage(this.channelId, this.lastPinnedMessageId);
-        } catch (e) {
-          // Old message may have been deleted
-        }
-      }
+        // Edit existing pinned message in place
+        await this.bot.telegram.editMessageText(
+          this.channelId,
+          this.lastPinnedMessageId,
+          undefined,
+          message,
+          { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any
+        );
+        console.log(`🏛️ SAFU Announcements: Updated pinned leaderboard #${this.lastPinnedMessageId}`);
+      } else {
+        // First time: send + pin
+        const sent = await this.bot.telegram.sendMessage(this.channelId, message, {
+          parse_mode: 'Markdown',
+          link_preview_options: { is_disabled: true }
+        } as any);
 
-      this.lastPinnedMessageId = sent.message_id;
-      console.log(`🏛️ SAFU Announcements: Pinned leaderboard message #${sent.message_id}`);
+        await this.bot.telegram.pinChatMessage(this.channelId, sent.message_id, {
+          disable_notification: true
+        } as any);
+
+        this.lastPinnedMessageId = sent.message_id;
+        console.log(`🏛️ SAFU Announcements: Pinned leaderboard message #${sent.message_id}`);
+      }
     } catch (error) {
       console.error('❌ SAFU Announcements: Failed to pin leaderboard:', error);
     }

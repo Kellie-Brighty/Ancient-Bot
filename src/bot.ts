@@ -38,8 +38,9 @@ type WizardContext = Context & Scenes.WizardContext<WizardSession>;
 
 const setupWizard = new Scenes.WizardScene<WizardContext>(
   'SETUP_WIZARD',
+  // Step 0: Select chain
   async (ctx) => {
-    await ctx.reply(
+    const sent = await ctx.reply(
       `🏛️ *SAFU Setup Wizard: Step 1*\n\nWelcome to the SAFU Buy Monitor setup. Select the network you want to monitor:`,
       {
         parse_mode: 'Markdown',
@@ -49,35 +50,80 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
         ])
       }
     );
+    (ctx.wizard.state as any).botMsgId = sent.message_id;
     return ctx.wizard.next();
   },
+  // Step 1: Token address input
   async (ctx) => {
     if (!ctx.message || !('text' in ctx.message)) return;
     const tokenAddress = ctx.message.text.trim();
-    if (tokenAddress.length < 32) return ctx.reply('❌ Invalid address. Please try again.');
+
+    // Delete user's text message
+    try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
+
+    if (tokenAddress.length < 32) {
+      // Edit bot message to show error
+      const botMsgId = (ctx.wizard.state as any).botMsgId;
+      if (botMsgId) {
+        await bot.telegram.editMessageText(
+          ctx.chat!.id, botMsgId, undefined,
+          `🏛️ *Step 2: Token Target*\n\n❌ Invalid address. Please send a valid contract address.`,
+          { parse_mode: 'Markdown' } as any
+        );
+      }
+      return;
+    }
     
     (ctx.wizard.state as any).tokenAddress = tokenAddress;
-
-    // --- Run Security Scan ---
     const chain = (ctx.wizard.state as any).chain || 'eth';
-    await ctx.reply('🔍 *Scanning contract integrity...*', { parse_mode: 'Markdown' });
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+
+    // Edit to show scanning state
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `🔍 *Scanning contract integrity...*\n\n\`${tokenAddress}\``,
+        { parse_mode: 'Markdown' } as any
+      );
+    }
+
     const scanResult = await GoPlusScanner.scan(tokenAddress, chain);
     (ctx.wizard.state as any).securityScore = scanResult.score;
 
-    await ctx.replyWithMarkdown(GoPlusScanner.formatResult(scanResult));
-
-    await ctx.reply('🏛️ *Step 3: Custom Emoji*\n\nSend a **single emoji** for the buy progress bar, or click Skip.', 
-      Markup.inlineKeyboard([[Markup.button.callback('⏩ Skip Emoji', 'skip_emoji')]]));
+    // Edit to show scan result + next step
+    const scanText = GoPlusScanner.formatResult(scanResult);
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `${scanText}\n\n🏛️ *Step 3: Custom Emoji*\n\nSend a *single emoji* for the buy progress bar, or click Skip.`,
+        { parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '⏩ Skip Emoji', callback_data: 'skip_emoji' }]] }
+        } as any
+      );
+    }
     return ctx.wizard.next();
   },
+  // Step 2: Emoji input
   async (ctx) => {
     if (!ctx.message || !('text' in ctx.message)) return;
     (ctx.wizard.state as any).buyEmoji = ctx.message.text.trim();
-    
-    await ctx.reply('🏛️ *Step 4: Buy Media*\n\nSend an **Image or Video** for the alert, or click Finish.', 
-      Markup.inlineKeyboard([[Markup.button.callback('🏁 Finish Setup', 'finish_wizard')]]));
+
+    // Delete user's emoji message
+    try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
+
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `✅ Emoji set: ${ctx.message.text.trim()}\n\n🏛️ *Step 4: Buy Media*\n\nSend an *Image or Video* for the alert, or click Finish.`,
+        { parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
+        } as any
+      );
+    }
     return ctx.wizard.next();
   },
+  // Step 3: Media input
   async (ctx) => {
     if (!ctx.message) return;
     let fileId = '', type: 'photo' | 'video' = 'photo';
@@ -90,6 +136,9 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     } else return;
 
     (ctx.wizard.state as any).buyMedia = { fileId, type };
+
+    // Delete user's media message
+    try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
     
     const state = ctx.wizard.state as any;
     if (state.chatId) {
@@ -103,8 +152,17 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
       };
       syncBuyMonitor();
     }
-    await ctx.reply('🏛️ *Setup Complete!* 🦾\n\nEverything is locked in.', 
-      Markup.inlineKeyboard([[Markup.button.callback('🛡️ Enable Safeguard', 'enable_safeguard_final')]]));
+
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `🏛️ *Setup Complete!* 🦾\n\nEverything is locked in.`,
+        { parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '🛡️ Enable Safeguard', callback_data: 'enable_safeguard_final' }]] }
+        } as any
+      );
+    }
     return ctx.scene.leave();
   }
 );
@@ -115,7 +173,15 @@ setupWizard.action('setup_chain_eth', async (ctx) => {
     (ctx.wizard.state as any).chatId = chatId;
     (ctx.wizard.state as any).chain = 'eth';
     await safeAnswer(ctx, 'ETH Selected! 🔗');
-    await ctx.reply('🏛️ *Step 2: Token Target*\n\nPlease send the **Ethereum Token Address** (Pair or Token) you want to monitor.', { parse_mode: 'Markdown' });
+    
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `🏛️ *Step 2: Token Target*\n\nPlease send the *Ethereum Token Address* (Pair or Token) you want to monitor.`,
+        { parse_mode: 'Markdown' } as any
+      );
+    }
     return ctx.wizard.selectStep(1); 
   }
 });
@@ -126,7 +192,15 @@ setupWizard.action('setup_chain_sol', async (ctx) => {
     (ctx.wizard.state as any).chatId = chatId;
     (ctx.wizard.state as any).chain = 'solana';
     await safeAnswer(ctx, 'SOL Selected! 🔗');
-    await ctx.reply('🏛️ *Step 2: Token Target*\n\nPlease send the **Solana Token Mint Address** you want to monitor.', { parse_mode: 'Markdown' });
+    
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `🏛️ *Step 2: Token Target*\n\nPlease send the *Solana Token Mint Address* you want to monitor.`,
+        { parse_mode: 'Markdown' } as any
+      );
+    }
     return ctx.wizard.selectStep(1);
   }
 });
@@ -134,8 +208,17 @@ setupWizard.action('setup_chain_sol', async (ctx) => {
 setupWizard.action('skip_emoji', async (ctx) => {
   await safeAnswer(ctx, 'Skipped! ⏩');
   ctx.wizard.selectStep(3); 
-  await ctx.reply('🏛️ *Step 4: Buy Media*\n\nSend an **Image or Video** for the alert, or click Finish.', 
-    Markup.inlineKeyboard([[Markup.button.callback('🏁 Finish Setup', 'finish_wizard')]]));
+
+  const botMsgId = (ctx.wizard.state as any).botMsgId;
+  if (botMsgId) {
+    await bot.telegram.editMessageText(
+      ctx.chat!.id, botMsgId, undefined,
+      `🏛️ *Step 4: Buy Media*\n\nSend an *Image or Video* for the alert, or click Finish.`,
+      { parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
+      } as any
+    );
+  }
 });
 
 setupWizard.action('finish_wizard', async (ctx) => {
@@ -152,10 +235,20 @@ setupWizard.action('finish_wizard', async (ctx) => {
     syncBuyMonitor();
   }
   await safeAnswer(ctx, 'All set! 🏁');
-  await ctx.reply('🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.', 
-    Markup.inlineKeyboard([[Markup.button.callback('🛡️ Enable Safeguard', 'enable_safeguard_final')]]));
+
+  const botMsgId = (ctx.wizard.state as any).botMsgId;
+  if (botMsgId) {
+    await bot.telegram.editMessageText(
+      ctx.chat!.id, botMsgId, undefined,
+      `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.`,
+      { parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [[{ text: '🛡️ Enable Safeguard', callback_data: 'enable_safeguard_final' }]] }
+      } as any
+    );
+  }
   return ctx.scene.leave();
 });
+
 
 const stage = new Scenes.Stage<WizardContext>([setupWizard], {
   ttl: 300,
