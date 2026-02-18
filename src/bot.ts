@@ -107,7 +107,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     if (botMsgId) {
       await bot.telegram.editMessageText(
         ctx.chat!.id, botMsgId, undefined,
-        `✅ Emoji set: ${ctx.message.text.trim()}\n\n🏛️ *Step 4: Buy Media*\n\nSend an *Image or Video* for the alert, or click Finish.`,
+        `✅ Emoji set: ${ctx.message.text.trim()}\n\n🏛️ *Step 4: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
         { parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
         } as any
@@ -115,13 +115,16 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     }
     return ctx.wizard.next();
   },
-  // Step 3: Media input
+  // Step 3: Media input (photo, video, or GIF)
   async (ctx) => {
     if (!ctx.message) return;
-    let fileId = '', type: 'photo' | 'video' = 'photo';
+    let fileId = '', type: 'photo' | 'video' | 'animation' = 'photo';
     if ('photo' in ctx.message) {
       fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
       type = 'photo';
+    } else if ('animation' in ctx.message) {
+      fileId = ctx.message.animation.file_id;
+      type = 'animation';
     } else if ('video' in ctx.message) {
       fileId = ctx.message.video.file_id;
       type = 'video';
@@ -149,10 +152,8 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     if (botMsgId) {
       await bot.telegram.editMessageText(
         ctx.chat!.id, botMsgId, undefined,
-        `🏛️ *Setup Complete!* 🦾\n\nEverything is locked in.`,
-        { parse_mode: 'Markdown',
-          reply_markup: { inline_keyboard: [[{ text: '🛡️ Enable Safeguard', callback_data: 'enable_safeguard_final' }]] }
-        } as any
+        `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.`,
+        { parse_mode: 'Markdown' } as any
       );
     }
     return ctx.scene.leave();
@@ -205,7 +206,7 @@ setupWizard.action('skip_emoji', async (ctx) => {
   if (botMsgId) {
     await bot.telegram.editMessageText(
       ctx.chat!.id, botMsgId, undefined,
-      `🏛️ *Step 4: Buy Media*\n\nSend an *Image or Video* for the alert, or click Finish.`,
+      `🏛️ *Step 4: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
       { parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
       } as any
@@ -233,9 +234,7 @@ setupWizard.action('finish_wizard', async (ctx) => {
     await bot.telegram.editMessageText(
       ctx.chat!.id, botMsgId, undefined,
       `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.`,
-      { parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [[{ text: '🛡️ Enable Safeguard', callback_data: 'enable_safeguard_final' }]] }
-      } as any
+      { parse_mode: 'Markdown' } as any
     );
   }
   return ctx.scene.leave();
@@ -278,6 +277,8 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
       if (group.buyMedia) {
         if (group.buyMedia.type === 'photo') {
           await bot.telegram.sendPhoto(group.chatId, group.buyMedia.fileId, { caption: messageContent, parse_mode: 'Markdown' });
+        } else if (group.buyMedia.type === 'animation') {
+          await bot.telegram.sendAnimation(group.chatId, group.buyMedia.fileId, { caption: messageContent, parse_mode: 'Markdown' });
         } else {
           await bot.telegram.sendVideo(group.chatId, group.buyMedia.fileId, { caption: messageContent, parse_mode: 'Markdown' });
         }

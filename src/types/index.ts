@@ -10,7 +10,7 @@ export interface GroupConfig {
   buyEmoji?: string;
   buyMedia?: {
     fileId: string;
-    type: 'photo' | 'video';
+    type: 'photo' | 'video' | 'animation';
   };
 }
 
