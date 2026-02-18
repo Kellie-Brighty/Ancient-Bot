@@ -118,17 +118,38 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
   // Step 3: Media input (photo, video, or GIF)
   async (ctx) => {
     if (!ctx.message) return;
+    const msg = ctx.message as any;
     let fileId = '', type: 'photo' | 'video' | 'animation' = 'photo';
-    if ('photo' in ctx.message) {
-      fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+
+    if (msg.photo) {
+      fileId = msg.photo[msg.photo.length - 1].file_id;
       type = 'photo';
-    } else if ('animation' in ctx.message) {
-      fileId = ctx.message.animation.file_id;
+    } else if (msg.animation) {
+      fileId = msg.animation.file_id;
       type = 'animation';
-    } else if ('video' in ctx.message) {
-      fileId = ctx.message.video.file_id;
+    } else if (msg.video) {
+      fileId = msg.video.file_id;
       type = 'video';
-    } else return;
+    } else if (msg.document && msg.document.mime_type?.startsWith('video/')) {
+      fileId = msg.document.file_id;
+      type = 'animation';
+    } else {
+      // Delete unsupported message and prompt again
+      try { await ctx.deleteMessage(msg.message_id); } catch (e) {}
+      const botMsgId = (ctx.wizard.state as any).botMsgId;
+      if (botMsgId) {
+        await bot.telegram.editMessageText(
+          ctx.chat!.id, botMsgId, undefined,
+          `❌ Please send a *photo, video, or GIF* — not a sticker.\n\n🏛️ *Step 4: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
+          { parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
+          } as any
+        );
+      }
+      return;
+    }
+
+    console.log(`🏛️ Setup: Media received — type=${type}, fileId=${fileId.slice(0, 20)}...`);
 
     (ctx.wizard.state as any).buyMedia = { fileId, type };
 
@@ -152,7 +173,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     if (botMsgId) {
       await bot.telegram.editMessageText(
         ctx.chat!.id, botMsgId, undefined,
-        `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.`,
+        `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\n\`${state.tokenAddress}\` is now being watched by SAFU. Expect buy alerts.`,
         { parse_mode: 'Markdown' } as any
       );
     }
@@ -233,7 +254,7 @@ setupWizard.action('finish_wizard', async (ctx) => {
   if (botMsgId) {
     await bot.telegram.editMessageText(
       ctx.chat!.id, botMsgId, undefined,
-      `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\nYour bot is now live.`,
+      `🏛️ *SAFU Buy Monitor Configured!* 🦾\n\n\`${state.tokenAddress}\` is now being watched by SAFU. Expect buy alerts.`,
       { parse_mode: 'Markdown' } as any
     );
   }

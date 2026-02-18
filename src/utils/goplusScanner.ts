@@ -116,28 +116,45 @@ export class GoPlusScanner {
 
       // --- ETH-specific checks ---
       if (chain === 'eth') {
+        // Check if contract is renounced (owner is zero address)
+        const isRenounced = !token.owner_address || 
+          token.owner_address === '0x0000000000000000000000000000000000000000' ||
+          token.owner_address === '0x000000000000000000000000000000000000dead';
+
+        // ALWAYS dangerous — these don't depend on ownership
         if (token.is_honeypot === '1') risks.push('🍯 Honeypot (Cannot Sell)');
-        if (token.is_mintable === '1') risks.push('🖨️ Mintable (Dev can print tokens)');
-        if (token.owner_change_balance === '1') risks.push('⚠️ Owner can change balances');
         if (token.can_take_back_ownership === '1') risks.push('🔓 Ownership can be reclaimed');
-        if (token.is_blacklisted === '1') risks.push('🚫 Has Blacklist function');
-        if (token.cannot_sell_all === '1') risks.push('📉 Cannot sell all tokens');
-        if (token.trading_cooldown === '1') risks.push('⏳ Trading cooldown enabled');
         if (token.hidden_owner === '1') risks.push('👤 Hidden Owner detected');
         if (token.selfdestruct === '1') risks.push('💀 Contract can self-destruct');
-        if (token.transfer_pausable === '1') risks.push('⏸️ Transfers can be paused');
-        if (token.is_proxy === '1') risks.push('🔄 Upgradeable proxy contract');
-        if (token.external_call === '1') risks.push('📡 External contract calls');
-        if (token.slippage_modifiable === '1') risks.push('📊 Slippage can be modified');
-        if (token.personal_slippage_modifiable === '1') risks.push('🎯 Per-user slippage control');
-        if (token.is_anti_whale === '1') risks.push('🐋 Anti-whale limits active');
-        if (token.is_whitelisted === '1') risks.push('📋 Has Whitelist function');
+        if (token.cannot_sell_all === '1') risks.push('📉 Cannot sell all tokens');
         if (token.cannot_buy === '1') risks.push('🚫 Cannot buy this token');
+        if (token.owner_change_balance === '1') risks.push('⚠️ Owner can change balances');
+        if (token.is_proxy === '1') risks.push('🔄 Upgradeable proxy contract');
 
+        // Owner-dependent flags — ONLY flag if NOT renounced
+        if (!isRenounced) {
+          if (token.is_mintable === '1') risks.push('🖨️ Mintable (Dev can print tokens)');
+          if (token.is_blacklisted === '1') risks.push('🚫 Has Blacklist function');
+          if (token.transfer_pausable === '1') risks.push('⏸️ Transfers can be paused');
+          if (token.slippage_modifiable === '1') risks.push('📊 Slippage can be modified');
+          if (token.personal_slippage_modifiable === '1') risks.push('🎯 Per-user slippage control');
+          if (token.is_whitelisted === '1') risks.push('📋 Has Whitelist function');
+          if (token.external_call === '1') risks.push('📡 External contract calls');
+          if (token.trading_cooldown === '1') risks.push('⏳ Trading cooldown enabled');
+        }
+
+        // Anti-whale is PROTECTIVE — never flag it
+        // if (token.is_anti_whale === '1') — intentionally skipped
+
+        // Tax checks — always relevant (hardcoded in contract)
         const buyTax = parseFloat(token.buy_tax || '0');
         const sellTax = parseFloat(token.sell_tax || '0');
         if (buyTax > 0.1) risks.push(`💸 High Buy Tax: ${(buyTax * 100).toFixed(1)}%`);
         if (sellTax > 0.1) risks.push(`💸 High Sell Tax: ${(sellTax * 100).toFixed(1)}%`);
+
+        if (isRenounced && risks.length === 0) {
+          console.log(`🛡️ GoPlus: Token is renounced + clean ✅`);
+        }
       }
 
       // --- SOL-specific checks ---
