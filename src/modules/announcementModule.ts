@@ -27,14 +27,18 @@ export class AnnouncementModule {
       // 1. Check if leaderboard order changed → update pin
       await this.checkAndUpdatePin();
 
-      // 2. If this token is in the Top 10, post buy alert to channel
+      // 2. If this token is in the Top 10 AND clean, post buy alert to channel
       const leaderboard = await TrendingModule.getLeaderboard(10);
       const position = leaderboard.findIndex(
         t => t.tokenAddress.toLowerCase() === alert.tokenAddress.toLowerCase()
       );
 
       if (position !== -1) {
-        await this.postBuyToChannel(alert, position + 1);
+        const chain = alert.chain || ChainUtils.identifyChain(alert.tokenAddress);
+        const scanResult = await GoPlusScanner.scan(alert.tokenAddress, chain);
+        if (scanResult.risks.length === 0) {
+          await this.postBuyToChannel(alert, position + 1);
+        }
       }
     } catch (error) {
       console.error('❌ SAFU Announcements: Error processing buy:', error);
@@ -64,19 +68,28 @@ export class AnnouncementModule {
   private static async pinLeaderboard(leaderboard: TrendingToken[]) {
     const positionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
+    // Filter: only show clean tokens (no risks)
+    const cleanTokens: TrendingToken[] = [];
+    for (const token of leaderboard) {
+      const chain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
+      const scanResult = await GoPlusScanner.scan(token.tokenAddress, chain);
+      if (scanResult.risks.length === 0) {
+        cleanTokens.push(token);
+      }
+    }
+
+    if (cleanTokens.length === 0) return;
+
     const lines: string[] = [];
-    for (const [i, token] of leaderboard.entries()) {
+    for (const [i, token] of cleanTokens.entries()) {
+      if (i >= 10) break;
       const mcap = token.score >= 1000000
         ? `${(token.score / 1000000).toFixed(1)}M`
         : token.score >= 1000
           ? `${(token.score / 1000).toFixed(1)}K`
           : token.score.toFixed(0);
       
-      const chain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
-      const scanResult = await GoPlusScanner.scan(token.tokenAddress, chain);
-      const secBadge = scanResult.score === 'DANGER' ? ' 🚨' : scanResult.score === 'CAUTION' ? ' ⚠️' : ' ✅';
-      
-      lines.push(`${positionEmojis[i]}  ${token.symbol}    $${mcap}/m${secBadge}`);
+      lines.push(`${positionEmojis[i]}  ${token.symbol}    $${mcap}/m ✅`);
     }
 
     const botUsername = (this.bot as any).botInfo?.username || 'SAFUBot';

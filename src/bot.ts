@@ -78,24 +78,16 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     const chain = (ctx.wizard.state as any).chain || 'eth';
     const botMsgId = (ctx.wizard.state as any).botMsgId;
 
-    // Edit to show scanning state
+    // Silent security scan (stored for internal use)
+    GoPlusScanner.scan(tokenAddress, chain).then(r => {
+      (ctx.wizard.state as any).securityScore = r.score;
+    }).catch(() => {});
+
+    // Skip straight to emoji step
     if (botMsgId) {
       await bot.telegram.editMessageText(
         ctx.chat!.id, botMsgId, undefined,
-        `🔍 *Scanning contract integrity...*\n\n\`${tokenAddress}\``,
-        { parse_mode: 'Markdown' } as any
-      );
-    }
-
-    const scanResult = await GoPlusScanner.scan(tokenAddress, chain);
-    (ctx.wizard.state as any).securityScore = scanResult.score;
-
-    // Edit to show scan result + next step
-    const scanText = GoPlusScanner.formatResult(scanResult);
-    if (botMsgId) {
-      await bot.telegram.editMessageText(
-        ctx.chat!.id, botMsgId, undefined,
-        `${scanText}\n\n🏛️ *Step 3: Custom Emoji*\n\nSend a *single emoji* for the buy progress bar, or click Skip.`,
+        `✅ Token set: \`${tokenAddress}\`\n\n🏛️ *Step 3: Custom Emoji*\n\nSend a *single emoji* for the buy progress bar, or click Skip.`,
         { parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [[{ text: '⏩ Skip Emoji', callback_data: 'skip_emoji' }]] }
         } as any
