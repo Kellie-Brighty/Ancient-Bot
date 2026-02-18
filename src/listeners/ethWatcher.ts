@@ -5,12 +5,30 @@ const UNISWAP_V2_ABI = [
   "event Swap(address indexed sender, uint amount0In, uint amount1In, uint amount0Out, uint amount1Out, address indexed to)"
 ];
 
+const ERC20_ABI = [
+  "function decimals() view returns (uint8)"
+];
+
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'.toLowerCase();
 
 export class EthWatcher {
   private provider: ethers.JsonRpcProvider;
   private activeSubscriptions: Map<string, ethers.Contract> = new Map();
   private alertCallback: ((alert: BuyAlert) => void) | null = null;
+  private decimalsCache: Map<string, number> = new Map();
+
+  private async getTokenDecimals(tokenAddress: string): Promise<number> {
+    if (this.decimalsCache.has(tokenAddress)) return this.decimalsCache.get(tokenAddress)!;
+    try {
+      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider);
+      const decimals = await contract.decimals();
+      const d = Number(decimals);
+      this.decimalsCache.set(tokenAddress, d);
+      return d;
+    } catch (e) {
+      return 18; // fallback
+    }
+  }
 
   constructor() {
     const rpcUrl = process.env.ETH_RPC_URL;
@@ -102,7 +120,9 @@ export class EthWatcher {
               // Fetch FRESH pair data for real-time market cap
               const freshPair = await this.getPairInfo(token) || pair;
 
-              const amountTokenStr = Number(ethers.formatUnits(tokenAmount, 18)).toLocaleString(undefined, { maximumFractionDigits: 0 });
+              // Get actual token decimals (not always 18)
+              const decimals = await this.getTokenDecimals(token);
+              const amountTokenStr = Number(ethers.formatUnits(tokenAmount, decimals)).toLocaleString(undefined, { maximumFractionDigits: 0 });
               
               const alert: BuyAlert = {
                 tokenAddress: token,

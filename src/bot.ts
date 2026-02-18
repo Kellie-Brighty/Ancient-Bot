@@ -98,7 +98,16 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
   // Step 2: Emoji input
   async (ctx) => {
     if (!ctx.message || !('text' in ctx.message)) return;
-    (ctx.wizard.state as any).buyEmoji = ctx.message.text.trim();
+    const msg = ctx.message as any;
+    (ctx.wizard.state as any).buyEmoji = msg.text.trim();
+
+    // Check for Telegram Premium custom emoji
+    if (msg.entities) {
+      const customEmojiEntity = msg.entities.find((e: any) => e.type === 'custom_emoji');
+      if (customEmojiEntity?.custom_emoji_id) {
+        (ctx.wizard.state as any).customEmojiId = customEmojiEntity.custom_emoji_id;
+      }
+    }
 
     // Delete user's emoji message
     try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
@@ -163,6 +172,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
         chain: state.chain,
         tokenAddress: state.tokenAddress,
         buyEmoji: state.buyEmoji,
+        customEmojiId: state.customEmojiId,
         buyMedia: state.buyMedia,
         minBuyAmount: 0
       };
@@ -243,6 +253,7 @@ setupWizard.action('finish_wizard', async (ctx) => {
       chain: state.chain,
       tokenAddress: state.tokenAddress,
       buyEmoji: state.buyEmoji,
+      customEmojiId: state.customEmojiId,
       buyMedia: state.buyMedia,
       minBuyAmount: 0
     };
@@ -280,31 +291,42 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
   for (const group of targetGroups) {
     try {
       const emoji = group.buyEmoji || '🟢';
-      const emojiString = emoji.repeat(15); 
+      const customEmojiId = group.customEmojiId;
+      
+      let emojiString = '';
+      if (customEmojiId) {
+        // Build progress bar with custom emoji HTML tags
+        const singleEmoji = `<tg-emoji emoji-id="${customEmojiId}">${emoji}</tg-emoji>`;
+        emojiString = singleEmoji.repeat(15);
+      } else {
+        emojiString = emoji.repeat(15);
+      }
+
       const explorerUrl = alert.chain === 'solana' ? `https://solscan.io/account/${alert.buyer}` : `https://etherscan.io/address/${alert.buyer}`;
       const txUrl = alert.chain === 'solana' ? `https://solscan.io/tx/${alert.txnHash}` : `https://etherscan.io/tx/${alert.txnHash}`;
       const screenerUrl = alert.chain === 'solana' ? `https://dexscreener.com/solana/${alert.tokenAddress}` : `https://dexscreener.com/ethereum/${alert.tokenAddress}`;
 
       const messageContent = 
-        `🏛️ *${alert.symbol} Buy!*\n` +
+        `🏛️ <b>${alert.symbol} Buy!</b>\n` +
         `${emojiString}\n\n` +
-        `💸 *Spent:* \`$${alert.amountUSD.toFixed(2)} (${alert.amountNative})\`\n` +
-        `💰 *Got:* \`${alert.amountToken} ${alert.symbol}\`\n` +
-        `👤 *Buyer:* [\`${alert.buyer.slice(0, 4)}...${alert.buyer.slice(-4)}\`](${explorerUrl})\n` +
-        `${alert.isNewHolder ? '🆕 *New Holder*\n' : ''}` +
-        `🏛️ *Market Cap:* \`${alert.marketCap}\`\n\n` +
-        `🔗 [TX](${txUrl}) | [Screener](${screenerUrl})`;
+        `💸 <b>Spent:</b> <code>$${alert.amountUSD.toFixed(2)} (${alert.amountNative})</code>\n` +
+        `💰 <b>Got:</b> <code>${alert.amountToken} ${alert.symbol}</code>\n` +
+        `👤 <b>Buyer:</b> <a href="${explorerUrl}"><code>${alert.buyer.slice(0, 4)}...${alert.buyer.slice(-4)}</code></a>\n` +
+        `${alert.isNewHolder ? '🆕 <b>New Holder</b>\n' : ''}` +
+        `🏛️ <b>Market Cap:</b> <code>${alert.marketCap}</code>\n\n` +
+        `🔗 <a href="${txUrl}">TX</a> | <a href="${screenerUrl}">Screener</a>`;
 
       if (group.buyMedia) {
+        const mediaOptions = { caption: messageContent, parse_mode: 'HTML' };
         if (group.buyMedia.type === 'photo') {
-          await bot.telegram.sendPhoto(group.chatId, group.buyMedia.fileId, { caption: messageContent, parse_mode: 'Markdown' });
+          await bot.telegram.sendPhoto(group.chatId, group.buyMedia.fileId, mediaOptions as any);
         } else if (group.buyMedia.type === 'animation') {
-          await bot.telegram.sendAnimation(group.chatId, group.buyMedia.fileId, { caption: messageContent, parse_mode: 'Markdown' });
+          await bot.telegram.sendAnimation(group.chatId, group.buyMedia.fileId, mediaOptions as any);
         } else {
-          await bot.telegram.sendVideo(group.chatId, group.buyMedia.fileId, { caption: messageContent, parse_mode: 'Markdown' });
+          await bot.telegram.sendVideo(group.chatId, group.buyMedia.fileId, mediaOptions as any);
         }
       } else {
-        await bot.telegram.sendMessage(group.chatId, messageContent, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } } as any);
+        await bot.telegram.sendMessage(group.chatId, messageContent, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } } as any);
       }
     } catch (e) {
       console.error(`Failed to send alert to ${group.chatId}:`, e);

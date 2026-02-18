@@ -6,6 +6,7 @@ export interface GroupConfig {
   tokenAddress: string;
   minBuyAmount: number; // in USD
   buyEmoji?: string;
+  customEmojiId?: string; // Telegram premium custom emoji ID
   buyMedia?: {
     fileId: string;
     type: 'photo' | 'video' | 'animation';
