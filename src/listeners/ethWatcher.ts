@@ -99,21 +99,24 @@ export class EthWatcher {
               // Ignore trades below ~ $1 (approx 0.0004 ETH) to prevent flooding/rate-limits
               if (solSpent < 0.0004) return; 
 
+              // Fetch FRESH pair data for real-time market cap
+              const freshPair = await this.getPairInfo(token) || pair;
+
               const amountTokenStr = Number(ethers.formatUnits(tokenAmount, 18)).toLocaleString(undefined, { maximumFractionDigits: 0 });
               
               const alert: BuyAlert = {
                 tokenAddress: token,
-                symbol: pair.baseToken.symbol,
+                symbol: freshPair.baseToken.symbol,
                 amountToken: amountTokenStr,
                 amountNative: `${solSpent.toFixed(4)} ETH`,
-                amountUSD: solSpent * (parseFloat(pair.priceUsd) / (parseFloat(pair.priceNative) || 1)), // Rough estimate from pair
-                marketCap: pair.fdv ? `$${(pair.fdv / 1000).toFixed(1)}K` : 'Unknown',
+                amountUSD: solSpent * (parseFloat(freshPair.priceUsd) / (parseFloat(freshPair.priceNative) || 1)),
+                marketCap: freshPair.fdv ? this.formatMarketCap(freshPair.fdv) : 'Unknown',
                 buyer: to,
                 txnHash: event.log.transactionHash,
                 chain: 'eth',
                 dex: 'Uniswap V2',
                 timestamp: Date.now(),
-                isNewHolder: true // Hard to check on ETH without deep state call, default to true
+                isNewHolder: true
               };
 
               console.log(`🏛️  SAFU Buy Monitor: [ETH MATCH] for ${token} by ${to} (${solSpent.toFixed(4)} ETH)`);
@@ -128,5 +131,11 @@ export class EthWatcher {
         }
       }
     }
+  }
+
+  private formatMarketCap(fdv: number): string {
+    if (fdv >= 1_000_000_000) return `$${(fdv / 1_000_000_000).toFixed(2)}B`;
+    if (fdv >= 1_000_000) return `$${(fdv / 1_000_000).toFixed(2)}M`;
+    return `$${(fdv / 1000).toFixed(1)}K`;
   }
 }
