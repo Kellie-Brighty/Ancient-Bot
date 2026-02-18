@@ -1,6 +1,7 @@
 import { BuyAlert } from '../types';
 import { FirestoreService } from './firestoreService';
 import { ChainUtils } from '../utils/chainUtils';
+import { AnnouncementModule } from './announcementModule';
 
 interface Trade {
   tokenAddress: string;
@@ -38,6 +39,11 @@ export class TrendingModule {
       lastUpdate: Date.now(),
       chain: actualChain
     });
+
+    // Trigger live channel updates
+    AnnouncementModule.onBuyRecorded(alert).catch(e => 
+      console.error('❌ SAFU Announcements: Channel update failed:', e)
+    );
   }
 
   private static cleanup() {

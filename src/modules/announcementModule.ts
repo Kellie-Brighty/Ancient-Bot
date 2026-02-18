@@ -1,83 +1,161 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import { TrendingModule } from './trending';
 import { ChainUtils } from '../utils/chainUtils';
 import { GoPlusScanner } from '../utils/goplusScanner';
+import type { BuyAlert, TrendingToken } from '../types';
 
 export class AnnouncementModule {
   private static bot: Telegraf;
   private static channelId: string;
-  private static interval: any = null;
+  private static lastPinnedMessageId: number | null = null;
+  private static lastLeaderboardHash: string = '';
 
   static init(bot: Telegraf, channelId: string) {
     this.bot = bot;
     this.channelId = channelId;
-    console.log(`🏛️ SAFU Announcements: Initialized for channel ${this.channelId}`);
-    
-    // Start Heartbeat: 5 minutes for production
-    this.startHeartbeat(300000);
+    console.log(`🏛️ SAFU Announcements: Live Trending Channel initialized for ${this.channelId}`);
   }
 
-  private static startHeartbeat(ms: number) {
-    if (this.interval) clearInterval(this.interval);
-    
-    this.interval = setInterval(async () => {
-      try {
-        await this.postTrendingUpdate();
-      } catch (error) {
-        console.error('❌ SAFU Announcements: Heartbeat error:', error);
+  /**
+   * Called by TrendingModule after every recordBuy().
+   * Handles both pinned leaderboard updates and individual buy alerts.
+   */
+  static async onBuyRecorded(alert: BuyAlert) {
+    if (!this.channelId) return;
+
+    try {
+      // 1. Check if leaderboard order changed → update pin
+      await this.checkAndUpdatePin();
+
+      // 2. If this token is in the Top 10, post buy alert to channel
+      const leaderboard = await TrendingModule.getLeaderboard(10);
+      const position = leaderboard.findIndex(
+        t => t.tokenAddress.toLowerCase() === alert.tokenAddress.toLowerCase()
+      );
+
+      if (position !== -1) {
+        await this.postBuyToChannel(alert, position + 1);
       }
-    }, ms);
+    } catch (error) {
+      console.error('❌ SAFU Announcements: Error processing buy:', error);
+    }
   }
 
-  private static async postTrendingUpdate() {
-    const leaderboard = await TrendingModule.getLeaderboard(5);
+  /**
+   * Check if leaderboard changed and re-pin if needed.
+   */
+  private static async checkAndUpdatePin() {
+    const leaderboard = await TrendingModule.getLeaderboard(10);
     if (leaderboard.length === 0) return;
 
-    let message = `🔥 *SAFU GLOBAL TRENDING* 🔥\n\n`;
-    const now = Date.now();
+    // Build hash of current order to detect changes
+    const currentHash = leaderboard.map(t => t.tokenAddress).join('|');
+    if (currentHash === this.lastLeaderboardHash) return;
 
-    for (const [index, token] of leaderboard.entries()) {
-      const diffSeconds = Math.floor((now - token.lastUpdate) / 1000);
-      const diffMinutes = Math.floor(diffSeconds / 60);
+    this.lastLeaderboardHash = currentHash;
+    console.log('🏛️ SAFU Announcements: Leaderboard changed — updating pin');
+
+    await this.pinLeaderboard(leaderboard);
+  }
+
+  /**
+   * Build and pin the compact Top 10 leaderboard.
+   */
+  private static async pinLeaderboard(leaderboard: TrendingToken[]) {
+    const positionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+    const lines: string[] = [];
+    for (const [i, token] of leaderboard.entries()) {
+      const mcap = token.score >= 1000000
+        ? `${(token.score / 1000000).toFixed(1)}M`
+        : token.score >= 1000
+          ? `${(token.score / 1000).toFixed(1)}K`
+          : token.score.toFixed(0);
       
-      let timeAgo = 'Just now';
-      if (diffMinutes > 0) {
-        timeAgo = diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
-      } else if (diffSeconds > 10) {
-        timeAgo = `${diffSeconds} seconds ago`;
-      }
-
-      const formattedMomentum = token.score.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
-
-      const actualChain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
-      const networkLabel = actualChain === 'solana' ? '🔹 SOL' : '🔹 ETH';
-      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
-
-      // Security scan badge
-      const scanResult = await GoPlusScanner.scan(token.tokenAddress, actualChain);
-      const badge = GoPlusScanner.getBadge(scanResult);
-      const titleBadge = badge ? ` ${badge}` : '';
+      const chain = token.chain || ChainUtils.identifyChain(token.tokenAddress);
+      const scanResult = await GoPlusScanner.scan(token.tokenAddress, chain);
+      const secBadge = scanResult.score === 'DANGER' ? ' 🚨' : scanResult.score === 'CAUTION' ? ' ⚠️' : ' ✅';
       
-      message += `${medal} *${token.symbol}* (${networkLabel})${titleBadge}\n` +
-                 `   • *Momentum:* \`$${formattedMomentum}/min\`\n` +
-                 `   • *Status:* \`${timeAgo}\`\n` +
-                 `   • *CA:* \`${token.tokenAddress}\`\n`;
-
-      if (scanResult.risks.length > 0) {
-        message += `   • *Risks:* ${scanResult.risks.join(', ')}\n`;
-      }
-      message += `\n`;
+      lines.push(`${positionEmojis[i]}  ${token.symbol}    $${mcap}/m${secBadge}`);
     }
 
-    message += `_Momentum = "Speed of Money". Higher = Faster Buy Interest!_ 🦾\n` +
-               `👉 [Add SAFU to your Group](https://t.me/${(this.bot as any).botInfo?.username}?startgroup=true)`;
+    const botUsername = (this.bot as any).botInfo?.username || 'SAFUBot';
+    const message = lines.join('\n') +
+      `\n\n✅ security scanned\n` +
+      `🟢 @${botUsername} updates trending every trade`;
 
-    await this.bot.telegram.sendMessage(this.channelId, message, { 
-      parse_mode: 'Markdown',
-      link_preview_options: { is_disabled: true }
-    } as any);
+    try {
+      // Send new leaderboard
+      const sent = await this.bot.telegram.sendMessage(this.channelId, message, {
+        parse_mode: 'Markdown',
+        link_preview_options: { is_disabled: true }
+      } as any);
+
+      // Pin new message (silently)
+      await this.bot.telegram.pinChatMessage(this.channelId, sent.message_id, {
+        disable_notification: true
+      } as any);
+
+      // Unpin old message
+      if (this.lastPinnedMessageId) {
+        try {
+          await this.bot.telegram.unpinChatMessage(this.channelId, this.lastPinnedMessageId);
+        } catch (e) {
+          // Old message may have been deleted
+        }
+      }
+
+      this.lastPinnedMessageId = sent.message_id;
+      console.log(`🏛️ SAFU Announcements: Pinned leaderboard message #${sent.message_id}`);
+    } catch (error) {
+      console.error('❌ SAFU Announcements: Failed to pin leaderboard:', error);
+    }
+  }
+
+  /**
+   * Post an individual buy alert to the channel with position badge and inline buttons.
+   */
+  private static async postBuyToChannel(alert: BuyAlert, position: number) {
+    const positionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const posBadge = positionEmojis[position - 1] || `#${position}`;
+
+    const chain = alert.chain || ChainUtils.identifyChain(alert.tokenAddress);
+    const explorerUrl = chain === 'solana'
+      ? `https://solscan.io/tx/${alert.txnHash}`
+      : `https://etherscan.io/tx/${alert.txnHash}`;
+    const screenerUrl = chain === 'solana'
+      ? `https://dexscreener.com/solana/${alert.tokenAddress}`
+      : `https://dexscreener.com/ethereum/${alert.tokenAddress}`;
+    const buyerUrl = chain === 'solana'
+      ? `https://solscan.io/account/${alert.buyer}`
+      : `https://etherscan.io/address/${alert.buyer}`;
+    const networkLabel = chain === 'solana' ? 'SOL' : 'ETH';
+
+    const message =
+      `${posBadge} | *$${alert.symbol}* ${networkLabel}\n\n` +
+      `*${alert.symbol} Buy!*\n` +
+      `${('🟢').repeat(Math.min(Math.ceil(alert.amountUSD / 50), 15))}\n\n` +
+      `💰 ${alert.amountNative} ($${alert.amountUSD.toFixed(2)})\n` +
+      `📊 [${alert.buyer.slice(0, 6)}...${alert.buyer.slice(-4)}](${buyerUrl}) | [Txn](${explorerUrl})\n` +
+      `${alert.isNewHolder ? '✅ *New Holder*\n' : ''}` +
+      `🏛️ Market Cap $${alert.marketCap || 'N/A'}`;
+
+    const botUsername = (this.bot as any).botInfo?.username || 'SAFUBot';
+
+    try {
+      await this.bot.telegram.sendMessage(this.channelId, message, {
+        parse_mode: 'Markdown',
+        link_preview_options: { is_disabled: true },
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '➕ Add SAFU to your Group', url: `https://t.me/${botUsername}?startgroup=true` }
+            ]
+          ]
+        }
+      } as any);
+    } catch (error) {
+      console.error('❌ SAFU Announcements: Failed to post buy alert:', error);
+    }
   }
 }
