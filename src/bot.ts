@@ -40,6 +40,24 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
   'SETUP_WIZARD',
   // Step 0: Select chain
   async (ctx) => {
+    const state = ctx.wizard.state as any;
+
+    if (state.isUpdate) {
+      const msg = `🏛️ <b>SAFU Setup: Update Mode</b>\n\nExisting configuration detected for <code>${state.tokenAddress}</code>.\n\n🏛️ <b>Step 3: Custom Emoji</b>\n\nSend a <b>single emoji</b> for the buy progress bar, or click Skip.`;
+      
+      const reply_markup = { inline_keyboard: [[{ text: '⏩ Skip Emoji', callback_data: 'skip_emoji' }]] };
+
+      if (state.botMsgId) {
+        try {
+          await bot.telegram.editMessageText(ctx.chat!.id, state.botMsgId, undefined, msg, { parse_mode: 'HTML', reply_markup } as any);
+          return ctx.wizard.selectStep(2);
+        } catch (e) {}
+      }
+      const sent = await ctx.reply(msg, { parse_mode: 'HTML', reply_markup } as any);
+      state.botMsgId = sent.message_id;
+      return ctx.wizard.selectStep(2);
+    }
+
     const sent = await ctx.reply(
       `🏛️ *SAFU Setup Wizard: Step 1*\n\nWelcome to the SAFU Buy Monitor setup. Select the network you want to monitor:`,
       {
@@ -379,6 +397,24 @@ bot.start(async (ctx) => {
 
 
 
+const showManagementMenu = async (ctx: Context, config: GroupConfig) => {
+  const message = 
+    `🏛️ <b>SAFU Management Menu</b> 🛡️\n\n` +
+    `This group is currently monitoring:\n` +
+    `• <b>Network:</b> ${config.chain.toUpperCase()}\n` +
+    `• <b>Token:</b> <code>${config.tokenAddress}</code>\n\n` +
+    `What would you like to do?`;
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🛠️ Update Current Settings', 'manage_update')],
+    [Markup.button.callback('🔄 Watch New Token', 'manage_reset')],
+    [Markup.button.callback('🛑 Stop Monitoring', 'manage_stop')],
+    [Markup.button.callback('❌ Cancel', 'manage_cancel')]
+  ]);
+
+  return ctx.reply(message, { parse_mode: 'HTML', ...keyboard });
+};
+
 bot.command('setup', async (ctx) => {
   if (ctx.chat.type !== 'private') {
     const isAdmin = await PermissionUtils.isAdminOrOwner(ctx);
@@ -386,6 +422,11 @@ bot.command('setup', async (ctx) => {
     
     const botAdmin = await PermissionUtils.isBotAdmin(ctx);
     if (!botAdmin) return ctx.reply('⚠️ I need Administrator privileges to correctly configure this group.');
+
+    const existingConfig = groupConfigs[ctx.chat.id.toString()];
+    if (existingConfig) {
+      return showManagementMenu(ctx, existingConfig);
+    }
   }
   return (ctx as any).scene.enter('SETUP_WIZARD');
 });
@@ -448,8 +489,57 @@ bot.action('cmd_setup', async (ctx) => {
   if (ctx.chat?.type !== 'private') {
     const isAdmin = await PermissionUtils.isAdminOrOwner(ctx);
     if (!isAdmin) return safeAnswer(ctx, '❌ Only Group Admins can access setup.');
+
+    const chatId = ctx.chat!.id.toString();
+    const existingConfig = groupConfigs[chatId];
+    if (existingConfig) {
+      await safeAnswer(ctx);
+      return showManagementMenu(ctx, existingConfig);
+    }
   }
+  await safeAnswer(ctx);
   return (ctx as any).scene.enter('SETUP_WIZARD');
+});
+
+bot.action('manage_update', async (ctx) => {
+  const chatId = ctx.chat?.id.toString();
+  if (!chatId || !groupConfigs[chatId]) return safeAnswer(ctx, '❌ Configuration not found.');
+  
+  const config = groupConfigs[chatId];
+  await safeAnswer(ctx, 'Loading Settings... 🛠️');
+  
+  // Enter wizard with existing state
+  return (ctx as any).scene.enter('SETUP_WIZARD', {
+    isUpdate: true,
+    chatId: chatId,
+    chain: config.chain,
+    tokenAddress: config.tokenAddress,
+    buyEmoji: config.buyEmoji,
+    customEmojiId: config.customEmojiId,
+    buyMedia: config.buyMedia,
+    botMsgId: ctx.callbackQuery?.message?.message_id
+  });
+});
+
+bot.action('manage_reset', async (ctx) => {
+  await safeAnswer(ctx, 'Restarting Wizard... 🔄');
+  try { await ctx.deleteMessage(); } catch (e) {}
+  return (ctx as any).scene.enter('SETUP_WIZARD');
+});
+
+bot.action('manage_stop', async (ctx) => {
+  const chatId = ctx.chat?.id.toString();
+  if (chatId) {
+    delete groupConfigs[chatId];
+    syncBuyMonitor();
+    await safeAnswer(ctx, 'Monitoring Stopped! 🛑');
+    await ctx.editMessageText('🛑 <b>SAFU Monitoring Stopped.</b>\n\nThis group is no longer being watched.', { parse_mode: 'HTML' });
+  }
+});
+
+bot.action('manage_cancel', async (ctx) => {
+  await safeAnswer(ctx);
+  try { await ctx.deleteMessage(); } catch (e) {}
 });
 
 bot.action('cmd_trending_welcome', async (ctx) => {
