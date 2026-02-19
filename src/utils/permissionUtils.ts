@@ -26,6 +26,13 @@ export class PermissionUtils {
 
   static async isAdminOrOwner(ctx: Context, userId?: number): Promise<boolean> {
     if (ctx.chat?.type === 'private') return true;
+
+    // Allow anonymous group admins (they send as the chat itself)
+    if (ctx.senderChat?.id === ctx.chat?.id) return true;
+    
+    // Allow linked channel auto-forwards (which appear as automatic forwarded messages)
+    if ((ctx.message as any)?.is_automatic_forward) return true;
+
     const targetId = userId || ctx.from?.id;
     if (!targetId) return false;
 
