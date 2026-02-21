@@ -22,6 +22,7 @@ export interface TrendingToken {
   score: number;
   lastUpdate: number;
   chain: Chain;
+  socialLink?: string;
 }
 
 export interface BuyAlert {
@@ -37,4 +38,5 @@ export interface BuyAlert {
   dex: string;
   timestamp: number;
   isNewHolder?: boolean;
+  socialLink?: string;
 }

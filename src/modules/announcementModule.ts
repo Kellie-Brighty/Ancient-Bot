@@ -102,20 +102,26 @@ export class AnnouncementModule {
       // Find the group that has this token and get invite link
       let groupLink = '';
       try {
-        const groupEntry = Object.entries(groupConfigs).find(
-          ([_, config]) => config.tokenAddress?.toLowerCase() === token.tokenAddress.toLowerCase()
-        );
-        if (groupEntry) {
-          const chat = await this.bot.telegram.getChat(groupEntry[0]);
-          if ('invite_link' in chat && chat.invite_link) {
-            groupLink = chat.invite_link;
-          } else if ('username' in chat && chat.username) {
-            groupLink = `https://t.me/${chat.username}`;
-          } else {
-            // Try to export an invite link
-            try {
-              groupLink = await this.bot.telegram.exportChatInviteLink(groupEntry[0]);
-            } catch (e) { /* no permission to create link */ }
+        let groupLink = token.socialLink || '';
+        if (!groupLink) {
+          const groupEntry = Object.entries(groupConfigs).find(
+            ([_, config]) => config.tokenAddress?.toLowerCase() === token.tokenAddress.toLowerCase()
+          );
+          if (groupEntry) {
+            groupLink = groupEntry[1].socialLink || '';
+            if (!groupLink) {
+              const chat = await this.bot.telegram.getChat(groupEntry[0]);
+              if ('invite_link' in chat && chat.invite_link) {
+                groupLink = chat.invite_link;
+              } else if ('username' in chat && chat.username) {
+                groupLink = `https://t.me/${chat.username}`;
+              } else {
+                // Try to export an invite link
+                try {
+                  groupLink = await this.bot.telegram.exportChatInviteLink(groupEntry[0]);
+                } catch (e) { /* no permission to create link */ }
+              }
+            }
           }
         }
       } catch (e) { /* ignore */ }
@@ -182,9 +188,13 @@ export class AnnouncementModule {
       : `https://etherscan.io/address/${alert.buyer}`;
     const networkLabel = chain === 'solana' ? 'SOL' : 'ETH';
 
+    const symbolDisplay = alert.socialLink 
+      ? `[${alert.symbol}](${alert.socialLink})`
+      : `*${alert.symbol}*`;
+
     const message =
-      `${posBadge} | *$${alert.symbol}* ${networkLabel}\n\n` +
-      `*${alert.symbol} Buy!*\n` +
+      `${posBadge} | ${symbolDisplay} ${networkLabel}\n\n` +
+      `${symbolDisplay} Buy!\n` +
       `${('🟢').repeat(Math.min(Math.ceil(alert.amountUSD / 50), 15))}\n\n` +
       `💰 ${alert.amountNative} ($${alert.amountUSD.toFixed(2)})\n` +
       `📊 [${alert.buyer.slice(0, 6)}...${alert.buyer.slice(-4)}](${buyerUrl}) | [Txn](${explorerUrl})\n` +

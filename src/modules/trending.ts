@@ -37,7 +37,8 @@ export class TrendingModule {
       symbol: alert.symbol,
       score: score,
       lastUpdate: Date.now(),
-      chain: actualChain
+      chain: actualChain,
+      ...(alert.socialLink && { socialLink: alert.socialLink })
     });
 
     // Trigger live channel updates
