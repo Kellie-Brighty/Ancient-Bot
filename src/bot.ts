@@ -32,6 +32,7 @@ interface WizardSession extends Scenes.WizardSessionData {
     buyEmoji?: string;
     customEmojiId?: string;
     emojiStepUsd?: number;
+    socialLink?: string;
     buyMedia?: { fileId: string, type: 'photo' | 'video' };
   }
 }
@@ -176,7 +177,44 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     if (botMsgId) {
       await bot.telegram.editMessageText(
         ctx.chat!.id, botMsgId, undefined,
-        `✅ Emoji scaling set to $${stepValue} per emoji.\n\n🏛️ *Step 5: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
+        `✅ Emoji scaling set to $${stepValue} per emoji.\n\n🏛️ *Step 5: Social Link*\n\nPlease send the main Telegram URL (e.g. \`https://t.me/yourgroup\`) to attach to the buy alerts, or click Skip.`,
+        { parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '⏩ Skip Link', callback_data: 'skip_social_link' }]] }
+        } as any
+      );
+    }
+    return ctx.wizard.next();
+  },
+  // Step 4: Social Link input
+  async (ctx) => {
+    if (!ctx.message || !('text' in ctx.message)) return;
+    const msg = ctx.message as any;
+    const text = msg.text.trim();
+
+    // Verify it's a URL
+    if (!text.startsWith('http://') && !text.startsWith('https://') && !text.startsWith('t.me/')) {
+       try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
+       const botMsgId = (ctx.wizard.state as any).botMsgId;
+       if (botMsgId) {
+         await bot.telegram.editMessageText(
+           ctx.chat!.id, botMsgId, undefined,
+           `❌ Invalid link format. Please send a valid URL starting with http://, https://, or t.me/.\n\n🏛️ *Step 5: Social Link*\n\nPlease send the main Telegram URL.`,
+           { parse_mode: 'Markdown',
+             reply_markup: { inline_keyboard: [[{ text: '⏩ Skip Link', callback_data: 'skip_social_link' }]] }
+           } as any
+         );
+       }
+       return;
+    }
+
+    (ctx.wizard.state as any).socialLink = text.startsWith('t.me/') ? `https://${text}` : text;
+    try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
+
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `✅ Social link saved.\n\n🏛️ *Step 6: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
         { parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
         } as any
@@ -184,7 +222,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     }
     return ctx.wizard.next();
   },
-  // Step 4: Media input (photo, video, or GIF)
+  // Step 5: Media input (photo, video, or GIF)
   async (ctx) => {
     if (!ctx.message) return;
     const msg = ctx.message as any;
@@ -234,6 +272,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
         buyEmoji: state.buyEmoji,
         customEmojiId: state.customEmojiId,
         emojiStepUsd: state.emojiStepUsd || 10,
+        socialLink: state.socialLink,
         buyMedia: state.buyMedia,
         minBuyAmount: 0
       };
@@ -315,7 +354,23 @@ setupWizard.action('default_emoji_step', async (ctx) => {
   if (botMsgId) {
     await bot.telegram.editMessageText(
       ctx.chat!.id, botMsgId, undefined,
-      `🏛️ *Step 5: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
+      `🏛️ *Step 5: Social Link*\n\nPlease send the main Telegram URL (e.g. \`https://t.me/yourgroup\`) to attach to the buy alerts, or click Skip.`,
+      { parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [[{ text: '⏩ Skip Link', callback_data: 'skip_social_link' }]] }
+      } as any
+    );
+  }
+});
+
+setupWizard.action('skip_social_link', async (ctx) => {
+  await safeAnswer(ctx, 'Skipped! ⏩');
+  ctx.wizard.selectStep(5); 
+
+  const botMsgId = (ctx.wizard.state as any).botMsgId;
+  if (botMsgId) {
+    await bot.telegram.editMessageText(
+      ctx.chat!.id, botMsgId, undefined,
+      `🏛️ *Step 6: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
       { parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
       } as any
@@ -333,6 +388,7 @@ setupWizard.action('finish_wizard', async (ctx) => {
       buyEmoji: state.buyEmoji,
       customEmojiId: state.customEmojiId,
       emojiStepUsd: state.emojiStepUsd || 10,
+      socialLink: state.socialLink,
       buyMedia: state.buyMedia,
       minBuyAmount: 0
     };
@@ -400,8 +456,15 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
         `🏛️ <b>Market Cap:</b> <code>${alert.marketCap}</code>\n\n` +
         `🔗 <a href="${txUrl}">TX</a> | <a href="${screenerUrl}">Screener</a>`;
 
+      const keyboard: any[][] = [];
+      if (group.socialLink) {
+        keyboard.push([{ text: '💬 Join Telegram', url: group.socialLink }]);
+      }
+
+      const replyMarkup = keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined;
+
       if (group.buyMedia) {
-        const mediaOptions = { caption: messageContent, parse_mode: 'HTML' };
+        const mediaOptions = { caption: messageContent, parse_mode: 'HTML', reply_markup: replyMarkup };
         if (group.buyMedia.type === 'photo') {
           await bot.telegram.sendPhoto(group.chatId, group.buyMedia.fileId, mediaOptions as any);
         } else if (group.buyMedia.type === 'animation') {
@@ -410,7 +473,7 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
           await bot.telegram.sendVideo(group.chatId, group.buyMedia.fileId, mediaOptions as any);
         }
       } else {
-        await bot.telegram.sendMessage(group.chatId, messageContent, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } } as any);
+        await bot.telegram.sendMessage(group.chatId, messageContent, { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, reply_markup: replyMarkup } as any);
       }
     } catch (e) {
       console.error(`Failed to send alert to ${group.chatId}:`, e);
@@ -583,6 +646,7 @@ bot.action('manage_update', async (ctx) => {
     buyEmoji: config.buyEmoji,
     customEmojiId: config.customEmojiId,
     emojiStepUsd: config.emojiStepUsd,
+    socialLink: config.socialLink,
     buyMedia: config.buyMedia,
     botMsgId: ctx.callbackQuery?.message?.message_id
   });

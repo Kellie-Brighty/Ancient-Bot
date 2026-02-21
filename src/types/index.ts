@@ -8,6 +8,7 @@ export interface GroupConfig {
   buyEmoji?: string;
   customEmojiId?: string; // Telegram premium custom emoji ID
   emojiStepUsd?: number; // USD amount per emoji (e.g. 10 = 1 emoji per $10)
+  socialLink?: string; // Main telegram link to append to buy alerts
   buyMedia?: {
     fileId: string;
     type: 'photo' | 'video' | 'animation';
