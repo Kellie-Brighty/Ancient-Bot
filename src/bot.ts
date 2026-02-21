@@ -30,6 +30,8 @@ interface WizardSession extends Scenes.WizardSessionData {
     chain?: 'eth' | 'solana';
     tokenAddress?: string;
     buyEmoji?: string;
+    customEmojiId?: string;
+    emojiStepUsd?: number;
     buyMedia?: { fileId: string, type: 'photo' | 'video' };
   }
 }
@@ -134,7 +136,47 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     if (botMsgId) {
       await bot.telegram.editMessageText(
         ctx.chat!.id, botMsgId, undefined,
-        `✅ Emoji set: ${ctx.message.text.trim()}\n\n🏛️ *Step 4: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
+        `✅ Emoji set: ${ctx.message.text.trim()}\n\n🏛️ *Step 4: Emoji Scaling*\n\nHow many USD should equal 1 Emoji? (e.g., '10' for $10 = 1 Emoji)\n\nReply with a number, or click Default.`,
+        { parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '⏩ Default ($10)', callback_data: 'default_emoji_step' }]] }
+        } as any
+      );
+    }
+    return ctx.wizard.next();
+  },
+  // Step 3: Emoji Scale input
+  async (ctx) => {
+    if (!ctx.message || !('text' in ctx.message)) return;
+    const msg = ctx.message as any;
+    const stepValue = parseInt(msg.text.trim());
+
+    if (isNaN(stepValue) || stepValue <= 0) {
+      // Delete user's text message
+      try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
+
+      const botMsgId = (ctx.wizard.state as any).botMsgId;
+      if (botMsgId) {
+        await bot.telegram.editMessageText(
+          ctx.chat!.id, botMsgId, undefined,
+          `❌ Invalid number. Please enter a valid number greater than 0.\n\n🏛️ *Step 4: Emoji Scaling*\n\nHow many USD should equal 1 Emoji?`,
+          { parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '⏩ Default ($10)', callback_data: 'default_emoji_step' }]] }
+          } as any
+        );
+      }
+      return;
+    }
+
+    (ctx.wizard.state as any).emojiStepUsd = stepValue;
+
+    // Delete user's message
+    try { await ctx.deleteMessage(ctx.message.message_id); } catch (e) {}
+
+    const botMsgId = (ctx.wizard.state as any).botMsgId;
+    if (botMsgId) {
+      await bot.telegram.editMessageText(
+        ctx.chat!.id, botMsgId, undefined,
+        `✅ Emoji scaling set to $${stepValue} per emoji.\n\n🏛️ *Step 5: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
         { parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
         } as any
@@ -142,7 +184,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
     }
     return ctx.wizard.next();
   },
-  // Step 3: Media input (photo, video, or GIF)
+  // Step 4: Media input (photo, video, or GIF)
   async (ctx) => {
     if (!ctx.message) return;
     const msg = ctx.message as any;
@@ -191,6 +233,7 @@ const setupWizard = new Scenes.WizardScene<WizardContext>(
         tokenAddress: state.tokenAddress,
         buyEmoji: state.buyEmoji,
         customEmojiId: state.customEmojiId,
+        emojiStepUsd: state.emojiStepUsd || 10,
         buyMedia: state.buyMedia,
         minBuyAmount: 0
       };
@@ -255,7 +298,24 @@ setupWizard.action('skip_emoji', async (ctx) => {
   if (botMsgId) {
     await bot.telegram.editMessageText(
       ctx.chat!.id, botMsgId, undefined,
-      `🏛️ *Step 4: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
+      `🏛️ *Step 4: Emoji Scaling*\n\nHow many USD should equal 1 Emoji? (e.g., '10' for $10 = 1 Emoji)\n\nReply with a number, or click Default.`,
+      { parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [[{ text: '⏩ Default ($10)', callback_data: 'default_emoji_step' }]] }
+      } as any
+    );
+  }
+});
+
+setupWizard.action('default_emoji_step', async (ctx) => {
+  await safeAnswer(ctx, 'Default ($10) set! ⏩');
+  (ctx.wizard.state as any).emojiStepUsd = 10;
+  ctx.wizard.selectStep(4); 
+
+  const botMsgId = (ctx.wizard.state as any).botMsgId;
+  if (botMsgId) {
+    await bot.telegram.editMessageText(
+      ctx.chat!.id, botMsgId, undefined,
+      `🏛️ *Step 5: Buy Media*\n\nSend an *Image, Video, or GIF* for the alert, or click Finish.`,
       { parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: [[{ text: '🏁 Finish Setup', callback_data: 'finish_wizard' }]] }
       } as any
@@ -272,6 +332,7 @@ setupWizard.action('finish_wizard', async (ctx) => {
       tokenAddress: state.tokenAddress,
       buyEmoji: state.buyEmoji,
       customEmojiId: state.customEmojiId,
+      emojiStepUsd: state.emojiStepUsd || 10,
       buyMedia: state.buyMedia,
       minBuyAmount: 0
     };
@@ -311,13 +372,18 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
       const emoji = group.buyEmoji || '🟢';
       const customEmojiId = group.customEmojiId;
       
+      const stepValue = group.emojiStepUsd && group.emojiStepUsd > 0 ? group.emojiStepUsd : 10;
+      let emojiCount = Math.floor(alert.amountUSD / stepValue);
+      // Clamp between 1 and 60 to prevent spam issues
+      emojiCount = Math.min(60, Math.max(1, emojiCount));
+
       let emojiString = '';
       if (customEmojiId) {
         // Build progress bar with custom emoji HTML tags
         const singleEmoji = `<tg-emoji emoji-id="${customEmojiId}">${emoji}</tg-emoji>`;
-        emojiString = singleEmoji.repeat(15);
+        emojiString = singleEmoji.repeat(emojiCount);
       } else {
-        emojiString = emoji.repeat(15);
+        emojiString = emoji.repeat(emojiCount);
       }
 
       const explorerUrl = alert.chain === 'solana' ? `https://solscan.io/account/${alert.buyer}` : `https://etherscan.io/address/${alert.buyer}`;
@@ -516,6 +582,7 @@ bot.action('manage_update', async (ctx) => {
     tokenAddress: config.tokenAddress,
     buyEmoji: config.buyEmoji,
     customEmojiId: config.customEmojiId,
+    emojiStepUsd: config.emojiStepUsd,
     buyMedia: config.buyMedia,
     botMsgId: ctx.callbackQuery?.message?.message_id
   });
