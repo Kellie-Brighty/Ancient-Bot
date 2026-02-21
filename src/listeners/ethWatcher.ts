@@ -87,11 +87,8 @@ export class EthWatcher {
 
             // Determine if it's a BUY
             // Rule: ETH goes IN, Token comes OUT
-            // amount0 is usually Token, amount1 is usually WETH (but can be reversed)
-            const isToken0Weth = pair.quoteToken.address.toLowerCase() === WETH ? pair.quoteToken.symbol === 'WETH' : pair.baseToken.address.toLowerCase() === WETH;
-            
-            // Re-fetch pair info for tokens/weth order if needed, but DexScreener tells us
-            const isWeth0 = pair.baseToken.address.toLowerCase() === WETH;
+            // In Uniswap V2, token0 is the address that is lexicographically smaller.
+            const isWeth0 = WETH < token.toLowerCase();
             
             let ethAmount = 0n;
             let tokenAmount = 0n;
