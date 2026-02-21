@@ -421,6 +421,12 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
   );
   if (targetGroups.length === 0) return;
 
+  // Enhance alert with the social link from the first matched group (or specific one if preferred)
+  const firstGroupWithLink = targetGroups.find(g => g.socialLink);
+  if (firstGroupWithLink) {
+      alert.socialLink = firstGroupWithLink.socialLink;
+  }
+
   TrendingModule.recordBuy(alert).catch(e => console.error('Trending record failed:', e));
 
   for (const group of targetGroups) {
@@ -457,9 +463,7 @@ const broadcastBuyAlert = async (alert: BuyAlert) => {
         `🔗 <a href="${txUrl}">TX</a> | <a href="${screenerUrl}">Screener</a>`;
 
       const keyboard: any[][] = [];
-      if (group.socialLink) {
-        keyboard.push([{ text: '💬 Join Telegram', url: group.socialLink }]);
-      }
+      keyboard.push([{ text: '➕ Add SAFU to your Group', url: `https://t.me/${bot.botInfo?.username}?startgroup=true` }]);
 
       const replyMarkup = keyboard.length > 0 ? { inline_keyboard: keyboard } : undefined;
 
@@ -593,7 +597,19 @@ bot.command('safu_trending', async (ctx) => {
     const badge = GoPlusScanner.getBadge(scanResult);
     const titleBadge = badge ? ` ${badge}` : '';
     
-    message += `${medal} *${token.symbol}* (${networkLabel})${titleBadge}\n` +
+    let socialLink = token.socialLink;
+    if (!socialLink) {
+        const groupEntry = Object.entries(groupConfigs).find(
+          ([_, config]) => config.tokenAddress?.toLowerCase() === token.tokenAddress.toLowerCase()
+        );
+        if (groupEntry) {
+            socialLink = groupEntry[1].socialLink;
+        }
+    }
+    
+    const symbolDisplay = socialLink ? `[${token.symbol}](${socialLink})` : `*${token.symbol}*`;
+    
+    message += `${medal} ${symbolDisplay} (${networkLabel})${titleBadge}\n` +
                `   • *Momentum:* \`$${formattedMomentum}/min\`\n` +
                `   • *Status:* \`${timeAgo}\`\n` +
                `   • *CA:* \`${token.tokenAddress}\`\n` +
@@ -747,29 +763,29 @@ bot.on('new_chat_members', async (ctx) => {
 });
 
 // --- Link Filtering (Admin Exempt) ---
-bot.on('message', async (ctx, next) => {
-  if (ctx.chat?.type === 'private') return next();
-  
-  const msg = ctx.message as any;
-  const hasLink = (msg.entities || []).some((e: any) => e.type === 'url' || e.type === 'text_link') ||
-                  (msg.caption_entities || []).some((e: any) => e.type === 'url' || e.type === 'text_link') ||
-                  (msg.text && (msg.text.includes('http://') || msg.text.includes('https://') || msg.text.includes('t.me/')));
-
-  if (hasLink) {
-    const isImmune = await PermissionUtils.isAdminOrOwner(ctx);
-    if (!isImmune) {
-      try {
-        await ctx.deleteMessage();
-        console.log(`🛡️ SAFU Link Filter: Deleted link from non-admin ${ctx.from?.id} in ${ctx.chat?.id}`);
-        // Optional: Send a silent warning or just disappear the link (cleaner)
-        return; 
-      } catch (e) {
-        console.warn('SAFU: Failed to delete link (Insufficient permissions?)');
-      }
-    }
-  }
-  return next();
-});
+// bot.on('message', async (ctx, next) => {
+//   if (ctx.chat?.type === 'private') return next();
+//   
+//   const msg = ctx.message as any;
+//   const hasLink = (msg.entities || []).some((e: any) => e.type === 'url' || e.type === 'text_link') ||
+//                   (msg.caption_entities || []).some((e: any) => e.type === 'url' || e.type === 'text_link') ||
+//                   (msg.text && (msg.text.includes('http://') || msg.text.includes('https://') || msg.text.includes('t.me/')));
+// 
+//   if (hasLink) {
+//     const isImmune = await PermissionUtils.isAdminOrOwner(ctx);
+//     if (!isImmune) {
+//       try {
+//         await ctx.deleteMessage();
+//         console.log(`🛡️ SAFU Link Filter: Deleted link from non-admin ${ctx.from?.id} in ${ctx.chat?.id}`);
+//         // Optional: Send a silent warning or just disappear the link (cleaner)
+//         return; 
+//       } catch (e) {
+//         console.warn('SAFU: Failed to delete link (Insufficient permissions?)');
+//       }
+//     }
+//   }
+//   return next();
+// });
 
 bot.command('help', (ctx) => {
   ctx.replyWithMarkdown(

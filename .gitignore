@@ -3,8 +3,6 @@ node_modules/
 .bun/
 
 # Environment
-.env
-.env.*
 !.env.example
 serviceAccountKey.json
 
@@ -17,7 +15,6 @@ logs/
 *.log
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -25,3 +22,8 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
+config.bat
